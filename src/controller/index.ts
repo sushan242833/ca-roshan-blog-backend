@@ -1,0 +1,2 @@
+// controller entry placeholder
+export {};

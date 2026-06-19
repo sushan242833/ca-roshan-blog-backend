@@ -1,0 +1,2 @@
+// database entrypoint placeholder
+export {};
