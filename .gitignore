@@ -1,0 +1,17 @@
+node_modules
+
+.next
+
+dist
+
+build
+
+.env
+
+.env.local
+
+coverage
+
+logs
+
+*.log
