@@ -6,6 +6,8 @@ import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 import { env } from "./env";
 import authRoutes from "@routes/auth.routes";
+import postRoutes from "@routes/post.routes";
+import tagRoutes from "@routes/tag.routes";
 
 const app: Application = express();
 
@@ -37,5 +39,7 @@ app.get("/health", (_req: Request, res: Response) => {
 
 // Auth routes
 app.use("/api/auth", authRoutes);
+app.use("/api/posts", postRoutes);
+app.use("/api/tags", tagRoutes);
 
 export default app;

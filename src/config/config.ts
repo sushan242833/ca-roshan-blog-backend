@@ -1,6 +1,5 @@
 import { Sequelize } from "sequelize-typescript";
 import { env } from "./env";
-import path from "path";
 
 const sequelize = new Sequelize({
   database: env.DB_NAME,

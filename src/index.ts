@@ -27,8 +27,13 @@ const startServer = async () => {
           console.log(`Server listening on port ${env.PORT}`);
         });
         break; // success
-      } catch (err: any) {
-        if (err && err.code === "EADDRINUSE") {
+      } catch (err: unknown) {
+        if (
+          typeof err === "object" &&
+          err !== null &&
+          "code" in err &&
+          err.code === "EADDRINUSE"
+        ) {
           attempt += 1;
           console.warn(
             `Port ${env.PORT} in use, retrying (${attempt}/${MAX_LISTEN_RETRIES})...`,

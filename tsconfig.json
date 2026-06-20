@@ -12,7 +12,7 @@
     "baseUrl": "src",
     "paths": {
       "@config/*": ["config/*"],
-      "@controller/*": ["controller/*"],
+      "@controllers/*": ["controllers/*"],
       "@database/*": ["database/*"],
       "@middleware/*": ["middleware/*"],
       "@models/*": ["models/*"],
@@ -21,7 +21,8 @@
       "@utils/*": ["utils/*"],
       "@validation/*": ["validation/*"],
       "@types/*": ["types/*"],
-      "@constants/*": ["constants/*"]
+      "@constants/*": ["constants/*"],
+      "@dto/*": ["dto/*"]
     },
     "skipLibCheck": true,
     "experimentalDecorators": true,
