@@ -1,3 +1,4 @@
+import { Transaction } from "sequelize";
 import { Media, MediaCreationAttributes } from "./media.model";
 
 export class MediaRepository {
@@ -11,8 +12,8 @@ export class MediaRepository {
     });
   }
 
-  async findById(id: string): Promise<Media | null> {
-    return Media.findByPk(id);
+  async findById(id: string, transaction?: Transaction): Promise<Media | null> {
+    return Media.findByPk(id, { transaction });
   }
 
   async softDeleteById(id: string): Promise<boolean> {

@@ -1,4 +1,4 @@
-import { QueryInterface } from "sequelize";
+import { DataTypes, QueryInterface } from "sequelize";
 import {
   ensureConstraint,
   ensureIndex,
@@ -19,8 +19,13 @@ export async function up(queryInterface: QueryInterface) {
         },
         subscriber_id: { type: "UUID", allowNull: false },
         post_id: { type: "UUID", allowNull: false },
-        status: { type: "VARCHAR(32)", allowNull: false },
+        status: {
+          type: DataTypes.ENUM("PENDING", "SENT", "FAILED"),
+          allowNull: false,
+          defaultValue: "PENDING",
+        },
         sent_at: { type: "TIMESTAMP WITH TIME ZONE", allowNull: true },
+        error_message: { type: "TEXT", allowNull: true },
         created_at: {
           type: "TIMESTAMP WITH TIME ZONE",
           allowNull: false,
@@ -37,6 +42,10 @@ export async function up(queryInterface: QueryInterface) {
 
     await ensureIndex(queryInterface, "newsletter_logs", ["status"], {
       name: "newsletter_logs_status",
+      transaction,
+    });
+    await ensureIndex(queryInterface, "newsletter_logs", ["post_id", "subscriber_id"], {
+      name: "newsletter_logs_post_subscriber",
       transaction,
     });
 
@@ -84,5 +93,8 @@ export async function down(queryInterface: QueryInterface) {
       })
       .catch(() => {});
     await queryInterface.dropTable("newsletter_logs", { transaction });
+    await queryInterface.sequelize
+      .query('DROP TYPE IF EXISTS "enum_newsletter_logs_status";', { transaction })
+      .catch(() => {});
   });
 }

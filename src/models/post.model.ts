@@ -22,12 +22,27 @@ import Tag from "./tag.model";
 import PostCategory from "./post-category.model";
 import PostTag from "./post-tag.model";
 import NewsletterLog from "./newsletter-log.model";
+import { Media } from "@modules/media/media.model";
+
+export enum PostStatus {
+  DRAFT = "DRAFT",
+  PUBLISHED = "PUBLISHED",
+  ARCHIVED = "ARCHIVED",
+}
 
 export interface PostAttributes {
   id: string;
   title: string;
-  content: string;
   slug: string;
+  excerpt?: string | null;
+  content: string;
+  featuredImageId?: string | null;
+  metaTitle?: string | null;
+  metaDescription?: string | null;
+  status: PostStatus;
+  featured: boolean;
+  readingTime: number;
+  viewCount: number;
   adminId: string;
   publishedAt?: Date | null;
   createdAt?: Date;
@@ -37,7 +52,19 @@ export interface PostAttributes {
 
 export type PostCreationAttributes = Optional<
   PostAttributes,
-  "id" | "publishedAt" | "createdAt" | "updatedAt" | "deletedAt"
+  | "id"
+  | "excerpt"
+  | "featuredImageId"
+  | "metaTitle"
+  | "metaDescription"
+  | "status"
+  | "featured"
+  | "readingTime"
+  | "viewCount"
+  | "publishedAt"
+  | "createdAt"
+  | "updatedAt"
+  | "deletedAt"
 >;
 
 @Table({
@@ -53,17 +80,60 @@ export class Post extends Model<PostAttributes, PostCreationAttributes> {
   id!: string;
 
   @AllowNull(false)
-  @Column({ type: DataType.STRING })
+  @Column({ type: DataType.STRING(255) })
   title!: string;
+
+  @Unique
+  @AllowNull(false)
+  @Column({ type: DataType.STRING(255) })
+  slug!: string;
+
+  @AllowNull(true)
+  @Column({ type: DataType.TEXT })
+  excerpt?: string | null;
 
   @AllowNull(false)
   @Column({ type: DataType.TEXT })
   content!: string;
 
-  @Unique
+  @ForeignKey(() => Media)
+  @AllowNull(true)
+  @Column({ type: DataType.UUID, field: "featured_image_id" })
+  featuredImageId?: string | null;
+
+  @AllowNull(true)
+  @Column({ type: DataType.STRING(60), field: "meta_title" })
+  metaTitle?: string | null;
+
+  @AllowNull(true)
+  @Column({ type: DataType.STRING(160), field: "meta_description" })
+  metaDescription?: string | null;
+
   @AllowNull(false)
-  @Column({ type: DataType.STRING })
-  slug!: string;
+  @Default(PostStatus.DRAFT)
+  @Column({
+    type: DataType.ENUM(
+      PostStatus.DRAFT,
+      PostStatus.PUBLISHED,
+      PostStatus.ARCHIVED,
+    ),
+  })
+  status!: PostStatus;
+
+  @AllowNull(false)
+  @Default(false)
+  @Column({ type: DataType.BOOLEAN })
+  featured!: boolean;
+
+  @AllowNull(false)
+  @Default(1)
+  @Column({ type: DataType.INTEGER, field: "reading_time" })
+  readingTime!: number;
+
+  @AllowNull(false)
+  @Default(0)
+  @Column({ type: DataType.INTEGER, field: "view_count" })
+  viewCount!: number;
 
   @ForeignKey(() => Admin)
   @AllowNull(false)
@@ -88,6 +158,9 @@ export class Post extends Model<PostAttributes, PostCreationAttributes> {
 
   @BelongsTo(() => Admin)
   author?: Admin;
+
+  @BelongsTo(() => Media)
+  featuredImage?: Media | null;
 
   @BelongsToMany(() => Category, () => PostCategory)
   categories?: Category[];

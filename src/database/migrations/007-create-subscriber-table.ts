@@ -1,4 +1,4 @@
-import { QueryInterface } from "sequelize";
+import { DataTypes, QueryInterface } from "sequelize";
 import { ensureIndex, ensureTable } from "@database/utils/migration-utils";
 
 export async function up(queryInterface: QueryInterface) {
@@ -14,9 +14,14 @@ export async function up(queryInterface: QueryInterface) {
           defaultValue: queryInterface.sequelize.literal("gen_random_uuid()"),
         },
         email: { type: "VARCHAR(255)", allowNull: false },
-        verified: { type: "BOOLEAN", allowNull: false, defaultValue: false },
+        status: {
+          type: DataTypes.ENUM("PENDING", "ACTIVE", "UNSUBSCRIBED"),
+          allowNull: false,
+          defaultValue: "PENDING",
+        },
         verification_token: { type: "VARCHAR(255)", allowNull: true },
-        subscribed_at: { type: "TIMESTAMP WITH TIME ZONE", allowNull: true },
+        unsubscribe_token: { type: "VARCHAR(255)", allowNull: false },
+        verified_at: { type: "TIMESTAMP WITH TIME ZONE", allowNull: true },
         created_at: {
           type: "TIMESTAMP WITH TIME ZONE",
           allowNull: false,
@@ -27,6 +32,7 @@ export async function up(queryInterface: QueryInterface) {
           allowNull: false,
           defaultValue: queryInterface.sequelize.literal("now()"),
         },
+        deleted_at: { type: "TIMESTAMP WITH TIME ZONE", allowNull: true },
       },
       { transaction },
     );
@@ -36,11 +42,28 @@ export async function up(queryInterface: QueryInterface) {
       unique: true,
       transaction,
     });
+    await ensureIndex(queryInterface, "subscribers", ["status"], {
+      name: "subscribers_status",
+      transaction,
+    });
+    await ensureIndex(queryInterface, "subscribers", ["verification_token"], {
+      name: "subscribers_verification_token_key",
+      unique: true,
+      transaction,
+    });
+    await ensureIndex(queryInterface, "subscribers", ["unsubscribe_token"], {
+      name: "subscribers_unsubscribe_token_key",
+      unique: true,
+      transaction,
+    });
   });
 }
 
 export async function down(queryInterface: QueryInterface) {
   return queryInterface.sequelize.transaction(async (transaction) => {
     await queryInterface.dropTable("subscribers", { transaction });
+    await queryInterface.sequelize
+      .query('DROP TYPE IF EXISTS "enum_subscribers_status";', { transaction })
+      .catch(() => {});
   });
 }

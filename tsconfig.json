@@ -23,7 +23,9 @@
       "@types/*": ["types/*"],
       "@constants/*": ["constants/*"],
       "@dto/*": ["dto/*"],
-      "@modules/*": ["modules/*"]
+      "@modules/*": ["modules/*"],
+      "@errors/*": ["errors/*"],
+      "@repositories/*": ["repositories/*"]
     },
     "skipLibCheck": true,
     "experimentalDecorators": true,

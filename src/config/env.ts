@@ -14,6 +14,11 @@ export interface Env {
   JWT_SECRET: string;
   JWT_REFRESH_SECRET: string;
   MEDIA_BASE_URL: string;
+  APP_BASE_URL: string;
+  API_BASE_URL: string;
+  RESEND_API_KEY?: string;
+  EMAIL_FROM: string;
+  NEWSLETTER_EMAIL_RATE_LIMIT_PER_SECOND: number;
 }
 
 function getEnv(name: string, fallback?: string): string {
@@ -24,7 +29,27 @@ function getEnv(name: string, fallback?: string): string {
   return val as string;
 }
 
+function getOptionalEnv(name: string): string | undefined {
+  const value = process.env[name];
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+  return normalized || undefined;
+}
+
+function getPositiveNumberEnv(name: string, fallback: string): number {
+  const value = Number(getEnv(name, fallback));
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${name} must be a positive number`);
+  }
+
+  return value;
+}
+
 const configuredPort = Number(getEnv("PORT", "4000"));
+const appBaseUrl = getEnv("APP_BASE_URL", `http://localhost:${configuredPort}`);
 
 const env: Env = {
   PORT: configuredPort,
@@ -37,6 +62,14 @@ const env: Env = {
   JWT_SECRET: getEnv("JWT_SECRET"),
   JWT_REFRESH_SECRET: getEnv("JWT_REFRESH_SECRET"),
   MEDIA_BASE_URL: getEnv("MEDIA_BASE_URL", `http://localhost:${configuredPort}`),
+  APP_BASE_URL: appBaseUrl,
+  API_BASE_URL: getEnv("API_BASE_URL", appBaseUrl),
+  RESEND_API_KEY: getOptionalEnv("RESEND_API_KEY"),
+  EMAIL_FROM: getEnv("EMAIL_FROM", "Roshan Blog <onboarding@resend.dev>"),
+  NEWSLETTER_EMAIL_RATE_LIMIT_PER_SECOND: getPositiveNumberEnv(
+    "NEWSLETTER_EMAIL_RATE_LIMIT_PER_SECOND",
+    "2",
+  ),
 };
 
 export { env };

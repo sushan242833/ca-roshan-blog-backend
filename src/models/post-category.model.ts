@@ -5,41 +5,33 @@ import {
   DataType,
   ForeignKey,
   PrimaryKey,
-  Default,
   CreatedAt,
-  UpdatedAt,
 } from "sequelize-typescript";
-import { Optional } from "sequelize";
 import Post from "./post.model";
 import Category from "./category.model";
 
 export interface PostCategoryAttributes {
-  id: string;
   postId: string;
   categoryId: string;
   createdAt?: Date;
-  updatedAt?: Date;
 }
 
-export type PostCategoryCreationAttributes = Optional<
+export type PostCategoryCreationAttributes = Omit<
   PostCategoryAttributes,
-  "id" | "createdAt" | "updatedAt"
+  "createdAt"
 >;
 
-@Table({ tableName: "post_categories", timestamps: true, underscored: true })
+@Table({ tableName: "post_categories", timestamps: false, underscored: true })
 export class PostCategory extends Model<
   PostCategoryAttributes,
   PostCategoryCreationAttributes
 > {
   @PrimaryKey
-  @Default(DataType.UUIDV4)
-  @Column({ type: DataType.UUID })
-  id!: string;
-
   @ForeignKey(() => Post)
   @Column({ type: DataType.UUID, field: "post_id" })
   postId!: string;
 
+  @PrimaryKey
   @ForeignKey(() => Category)
   @Column({ type: DataType.UUID, field: "category_id" })
   categoryId!: string;
@@ -47,10 +39,6 @@ export class PostCategory extends Model<
   @CreatedAt
   @Column({ field: "created_at" })
   createdAt!: Date;
-
-  @UpdatedAt
-  @Column({ field: "updated_at" })
-  updatedAt!: Date;
 }
 
 export default PostCategory;

@@ -25,7 +25,7 @@ export const authMiddleware = async (
     });
     if (!admin)
       return res.status(401).json({ success: false, message: "Invalid token" });
-    (req as any).user = { id: admin.id, email: admin.email };
+    req.user = { id: admin.id, email: admin.email };
     return next();
   } catch (err) {
     return res.status(401).json({ success: false, message: "Unauthorized" });

@@ -25,6 +25,10 @@ interface ExistingConstraintRow {
   constraint_name: string;
 }
 
+interface ExistingColumnRow {
+  column_name: string;
+}
+
 function normalizeIndexName(tableName: string, fields: string[]): string {
   return `${tableName}_${fields.join("_")}`;
 }
@@ -54,6 +58,37 @@ export async function ensureTable(
   }
 
   await queryInterface.createTable(tableName, columns, {
+    transaction: options.transaction,
+  });
+}
+
+export async function ensureColumn(
+  queryInterface: QueryInterface,
+  tableName: string,
+  columnName: string,
+  column: ModelAttributeColumnOptions,
+  options: EnsureTableOptions,
+): Promise<void> {
+  const existingColumns = await queryInterface.sequelize.query<ExistingColumnRow>(
+    `
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = :tableName
+        AND column_name = :columnName
+    `,
+    {
+      replacements: { tableName, columnName },
+      transaction: options.transaction,
+      type: QueryTypes.SELECT,
+    },
+  );
+
+  if (existingColumns.length > 0) {
+    return;
+  }
+
+  await queryInterface.addColumn(tableName, columnName, column, {
     transaction: options.transaction,
   });
 }

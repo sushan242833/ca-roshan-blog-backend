@@ -1,201 +1,510 @@
-import { Op } from "sequelize";
-import {
-  sequelize,
-  Post,
-  PostCategory,
-  PostTag,
-  Category,
-  Tag,
-} from "@models/index";
+import { Transaction } from "sequelize";
 import { CreatePostDto } from "@dto/create-post.dto";
+import { PaginatedResponse } from "@dto/pagination.dto";
+import {
+  PostDetailResponse,
+  PostSummaryResponse,
+  toPostDetailResponse,
+  toPostSummaryResponse,
+} from "@dto/post-response.dto";
 import { UpdatePostDto } from "@dto/update-post.dto";
+import {
+  BadRequestError,
+  ConflictError,
+  InternalServerError,
+  NotFoundError,
+  ValidationError,
+  ValidationIssue,
+} from "@errors/http-error";
+import type { Post } from "@models/post.model";
+import { PostCreationAttributes, PostStatus } from "@models/post.model";
+import mediaRepository, {
+  MediaRepository,
+} from "@modules/media/media.repository";
+import newsletterService, {
+  NewsletterService,
+} from "@services/newsletter.service";
+import postRepository, {
+  AdminPostListFilters,
+  PostListFilters,
+  PostRepository,
+} from "@repositories/post.repository";
 
-function slugify(input: string) {
-  return input
+const WORDS_PER_MINUTE = 200;
+const DEFAULT_SLUG = "post";
+const MAX_META_TITLE_LENGTH = 60;
+const MAX_META_DESCRIPTION_LENGTH = 160;
+
+function slugify(input: string): string {
+  const slug = input
     .toString()
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+
+  return slug || DEFAULT_SLUG;
 }
 
-class PostService {
-  async generateUniqueSlug(title: string) {
-    const base = slugify(title);
-    let slug = base;
-    let idx = 1;
-    // eslint-disable-next-line no-await-in-loop
-    while (await Post.findOne({ where: { slug } })) {
-      slug = `${base}-${idx}`;
-      idx += 1;
-    }
-    return slug;
+function normalizeRequiredString(value: string, field: string): string {
+  const normalized = value.trim();
+  if (!normalized) {
+    throw new ValidationError([{ field, message: `${field} is required.` }]);
+  }
+  return normalized;
+}
+
+function normalizeOptionalString(value: string | null | undefined): string | null {
+  if (typeof value !== "string") {
+    return null;
   }
 
-  async create(adminId: string, dto: CreatePostDto) {
-    return sequelize.transaction(async (t) => {
-      const slug = await this.generateUniqueSlug(dto.title);
-      const post = await Post.create(
-        {
-          title: dto.title,
-          content: dto.content,
-          slug,
-          adminId,
-          publishedAt: dto.published ? new Date() : null,
-        },
-        { transaction: t },
-      );
+  const normalized = value.trim().replace(/\s+/g, " ");
+  return normalized || null;
+}
 
-      if (dto.categoryIds && dto.categoryIds.length) {
-        const entries = dto.categoryIds.map((cid) => ({
-          postId: post.id,
-          categoryId: cid,
-        }));
-        // bulk insert
-        // @ts-ignore
-        await PostCategory.bulkCreate(entries, { transaction: t });
-      }
+function createExcerpt(content: string): string {
+  return content.trim().replace(/\s+/g, " ").slice(0, MAX_META_DESCRIPTION_LENGTH);
+}
 
-      if (dto.tagIds && dto.tagIds.length) {
-        const entries = dto.tagIds.map((tid) => ({
-          postId: post.id,
-          tagId: tid,
-        }));
-        // @ts-ignore
-        await PostTag.bulkCreate(entries, { transaction: t });
-      }
+function calculateReadingTime(content: string): number {
+  const words = content
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word.length > 0);
 
-      return post;
+  return Math.max(1, Math.ceil(words.length / WORDS_PER_MINUTE));
+}
+
+function uniqueValues(values: string[] | undefined): string[] {
+  return Array.from(new Set(values ?? []));
+}
+
+function resolveCreateStatus(dto: CreatePostDto): PostStatus {
+  if (dto.status) {
+    return dto.status;
+  }
+
+  if (typeof dto.published === "boolean") {
+    return dto.published ? PostStatus.PUBLISHED : PostStatus.DRAFT;
+  }
+
+  return PostStatus.DRAFT;
+}
+
+function resolveUpdateStatus(dto: UpdatePostDto): PostStatus | undefined {
+  if (dto.status) {
+    return dto.status;
+  }
+
+  if (typeof dto.published === "boolean") {
+    return dto.published ? PostStatus.PUBLISHED : PostStatus.DRAFT;
+  }
+
+  return undefined;
+}
+
+function applyStatus(post: Post, status: PostStatus): void {
+  post.status = status;
+
+  if (status === PostStatus.PUBLISHED && !post.publishedAt) {
+    post.publishedAt = new Date();
+  }
+
+  if (status === PostStatus.DRAFT) {
+    post.publishedAt = null;
+  }
+}
+
+function validateSeo(metaTitle: string | null, metaDescription: string | null): void {
+  const errors: ValidationIssue[] = [];
+
+  if (metaTitle && metaTitle.length > MAX_META_TITLE_LENGTH) {
+    errors.push({
+      field: "metaTitle",
+      message: `metaTitle must be ${MAX_META_TITLE_LENGTH} characters or fewer.`,
     });
   }
 
-  async update(postId: string, dto: UpdatePostDto) {
-    return sequelize.transaction(async (t) => {
-      const post = await Post.findByPk(postId, { transaction: t });
-      if (!post) throw { status: 404, message: "Post not found" };
+  if (metaDescription && metaDescription.length > MAX_META_DESCRIPTION_LENGTH) {
+    errors.push({
+      field: "metaDescription",
+      message: `metaDescription must be ${MAX_META_DESCRIPTION_LENGTH} characters or fewer.`,
+    });
+  }
 
-      if (dto.title && dto.title !== post.title) {
-        post.title = dto.title;
-        post.slug = await this.generateUniqueSlug(dto.title);
+  if (errors.length > 0) {
+    throw new ValidationError(errors);
+  }
+}
+
+function pagination<T>(
+  rows: T[],
+  count: number,
+  page: number,
+  limit: number,
+): PaginatedResponse<T> {
+  return {
+    items: rows,
+    pagination: {
+      page,
+      limit,
+      total: count,
+      totalPages: Math.ceil(count / limit),
+    },
+  };
+}
+
+export class PostService {
+  constructor(
+    private readonly repository: PostRepository = postRepository,
+    private readonly media: MediaRepository = mediaRepository,
+    private readonly newsletters: NewsletterService = newsletterService,
+  ) {}
+
+  async create(
+    adminId: string,
+    dto: CreatePostDto,
+  ): Promise<PostDetailResponse> {
+    return this.repository.transaction(async (transaction) => {
+      const title = normalizeRequiredString(dto.title, "title");
+      const content = normalizeRequiredString(dto.content, "content");
+      const excerpt = normalizeOptionalString(dto.excerpt) ?? createExcerpt(content);
+      const metaTitle = normalizeOptionalString(dto.metaTitle) ?? title;
+      const metaDescription =
+        normalizeOptionalString(dto.metaDescription) ?? excerpt;
+      const status = resolveCreateStatus(dto);
+      const categoryIds = uniqueValues(dto.categoryIds);
+      const tagIds = uniqueValues(dto.tagIds);
+
+      validateSeo(metaTitle, metaDescription);
+      await this.assertFeaturedImageExists(dto.featuredImageId, transaction);
+      await this.assertTaxonomyIdsExist(categoryIds, tagIds, transaction);
+
+      const slug = await this.generateUniqueSlug(
+        dto.slug ?? title,
+        undefined,
+        transaction,
+      );
+      const payload: PostCreationAttributes = {
+        title,
+        slug,
+        excerpt,
+        content,
+        featuredImageId: dto.featuredImageId ?? null,
+        metaTitle,
+        metaDescription,
+        status,
+        featured: dto.featured ?? false,
+        readingTime: calculateReadingTime(content),
+        viewCount: 0,
+        adminId,
+        publishedAt: status === PostStatus.PUBLISHED ? new Date() : null,
+      };
+
+      const post = await this.repository.create(payload, transaction);
+      await this.repository.replaceCategories(post.id, categoryIds, transaction);
+      await this.repository.replaceTags(post.id, tagIds, transaction);
+
+      if (post.status === PostStatus.PUBLISHED) {
+        await this.newsletters.schedulePostPublished(post.id, transaction);
       }
 
-      if (typeof dto.content !== "undefined")
-        post.content = dto.content as string;
+      return toPostDetailResponse(
+        await this.getPersistedPost(post.id, transaction),
+      );
+    });
+  }
 
-      if (typeof dto.published !== "undefined")
-        post.publishedAt = dto.published ? new Date() : null;
+  async update(
+    postId: string,
+    dto: UpdatePostDto,
+  ): Promise<PostDetailResponse> {
+    return this.repository.transaction(async (transaction) => {
+      const post = await this.repository.findById(postId, { transaction });
+      if (!post) {
+        throw new NotFoundError("Post not found.");
+      }
 
-      await post.save({ transaction: t });
+      const previousStatus = post.status;
+      const metaTitleWasFallback = !post.metaTitle || post.metaTitle === post.title;
+      const metaDescriptionWasFallback =
+        !post.metaDescription || post.metaDescription === (post.excerpt ?? "");
+
+      if (typeof dto.title !== "undefined") {
+        const title = normalizeRequiredString(dto.title, "title");
+        if (title !== post.title && typeof dto.slug === "undefined") {
+          post.slug = await this.generateUniqueSlug(title, post.id, transaction);
+        }
+        post.title = title;
+      }
+
+      if (typeof dto.slug !== "undefined") {
+        post.slug = await this.generateUniqueSlug(dto.slug, post.id, transaction);
+      }
+
+      if (typeof dto.content !== "undefined") {
+        post.content = normalizeRequiredString(dto.content, "content");
+        post.readingTime = calculateReadingTime(post.content);
+
+        if (!post.excerpt && typeof dto.excerpt === "undefined") {
+          post.excerpt = createExcerpt(post.content);
+        }
+      }
+
+      if (typeof dto.excerpt !== "undefined") {
+        post.excerpt = normalizeOptionalString(dto.excerpt);
+      }
+
+      if (typeof dto.featuredImageId !== "undefined") {
+        await this.assertFeaturedImageExists(dto.featuredImageId, transaction);
+        post.featuredImageId = dto.featuredImageId;
+      }
+
+      if (typeof dto.featured === "boolean") {
+        post.featured = dto.featured;
+      }
+
+      const nextStatus = resolveUpdateStatus(dto);
+      if (nextStatus) {
+        applyStatus(post, nextStatus);
+      }
+
+      if (typeof dto.metaTitle !== "undefined") {
+        post.metaTitle = normalizeOptionalString(dto.metaTitle) ?? post.title;
+      } else if (metaTitleWasFallback) {
+        post.metaTitle = post.title;
+      }
+
+      if (typeof dto.metaDescription !== "undefined") {
+        post.metaDescription =
+          normalizeOptionalString(dto.metaDescription) ?? (post.excerpt ?? "");
+      } else if (metaDescriptionWasFallback) {
+        post.metaDescription = post.excerpt ?? "";
+      }
+
+      validateSeo(post.metaTitle ?? null, post.metaDescription ?? null);
 
       if (dto.categoryIds) {
-        await PostCategory.destroy({
-          where: { postId: post.id },
-          transaction: t,
-        });
-        if (dto.categoryIds.length) {
-          const entries = dto.categoryIds.map((cid) => ({
-            postId: post.id,
-            categoryId: cid,
-          }));
-          // @ts-ignore
-          await PostCategory.bulkCreate(entries, { transaction: t });
-        }
+        const categoryIds = uniqueValues(dto.categoryIds);
+        await this.assertTaxonomyIdsExist(categoryIds, undefined, transaction);
+        await this.repository.replaceCategories(post.id, categoryIds, transaction);
       }
 
       if (dto.tagIds) {
-        await PostTag.destroy({ where: { postId: post.id }, transaction: t });
-        if (dto.tagIds.length) {
-          const entries = dto.tagIds.map((tid) => ({
-            postId: post.id,
-            tagId: tid,
-          }));
-          // @ts-ignore
-          await PostTag.bulkCreate(entries, { transaction: t });
-        }
+        const tagIds = uniqueValues(dto.tagIds);
+        await this.assertTaxonomyIdsExist(undefined, tagIds, transaction);
+        await this.repository.replaceTags(post.id, tagIds, transaction);
       }
 
-      return post;
+      await this.repository.save(post, transaction);
+      if (
+        previousStatus === PostStatus.DRAFT &&
+        post.status === PostStatus.PUBLISHED
+      ) {
+        await this.newsletters.schedulePostPublished(post.id, transaction);
+      }
+
+      return toPostDetailResponse(
+        await this.getPersistedPost(post.id, transaction),
+      );
     });
   }
 
-  async softDelete(postId: string) {
-    return sequelize.transaction(async (t) => {
-      const post = await Post.findByPk(postId, { transaction: t });
-      if (!post) throw { status: 404, message: "Post not found" };
-      await post.destroy({ transaction: t });
-      return true;
+  async softDelete(postId: string): Promise<void> {
+    await this.repository.transaction(async (transaction) => {
+      const post = await this.repository.findById(postId, { transaction });
+      if (!post) {
+        throw new NotFoundError("Post not found.");
+      }
+
+      await this.repository.softDelete(post, transaction);
     });
   }
 
-  async publish(postId: string) {
-    const post = await Post.findByPk(postId);
-    if (!post) throw { status: 404, message: "Post not found" };
-    post.publishedAt = new Date();
-    await post.save();
-    return post;
+  async restore(postId: string): Promise<PostDetailResponse> {
+    return this.repository.transaction(async (transaction) => {
+      const post = await this.repository.findById(postId, {
+        transaction,
+        includeDeleted: true,
+      });
+      if (!post) {
+        throw new NotFoundError("Post not found.");
+      }
+
+      if (post.deletedAt) {
+        await this.repository.restore(post, transaction);
+      }
+
+      return toPostDetailResponse(
+        await this.getPersistedPost(post.id, transaction),
+      );
+    });
   }
 
-  async unpublish(postId: string) {
-    const post = await Post.findByPk(postId);
-    if (!post) throw { status: 404, message: "Post not found" };
-    post.publishedAt = null;
-    await post.save();
-    return post;
+  async publish(postId: string): Promise<PostDetailResponse> {
+    return this.transitionStatus(postId, PostStatus.PUBLISHED);
   }
 
-  async getPublished(page = 1, limit = 10, q?: string) {
-    const where: any = { publishedAt: { [Op.ne]: null } };
-    if (q) {
-      where[Op.or] = [
-        { title: { [Op.iLike]: `%${q}%` } },
-        { content: { [Op.iLike]: `%${q}%` } },
-      ];
+  async archive(postId: string): Promise<PostDetailResponse> {
+    return this.transitionStatus(postId, PostStatus.ARCHIVED);
+  }
+
+  async unpublish(postId: string): Promise<PostDetailResponse> {
+    return this.transitionStatus(postId, PostStatus.DRAFT);
+  }
+
+  async getPublished(
+    filters: PostListFilters,
+  ): Promise<PaginatedResponse<PostSummaryResponse>> {
+    const { rows, count } = await this.repository.listPublished(filters);
+    return pagination(
+      rows.map(toPostSummaryResponse),
+      count,
+      filters.page,
+      filters.limit,
+    );
+  }
+
+  async getFeatured(
+    page: number,
+    limit: number,
+  ): Promise<PaginatedResponse<PostSummaryResponse>> {
+    const { rows, count } = await this.repository.listFeatured(page, limit);
+    return pagination(rows.map(toPostSummaryResponse), count, page, limit);
+  }
+
+  async getBySlug(slug: string): Promise<PostDetailResponse> {
+    const post = await this.repository.findPublishedBySlug(slug);
+    if (!post) {
+      throw new NotFoundError("Post not found.");
     }
-    const offset = (page - 1) * limit;
-    const { rows, count } = await Post.findAndCountAll({
-      where,
-      offset,
-      limit,
-      order: [["published_at", "DESC"]],
-      include: [Category, Tag],
-    });
-    return {
-      data: rows,
-      meta: { total: count, page, limit, pages: Math.ceil(count / limit) },
-    };
+
+    await this.repository.incrementViewCount(post.id);
+    post.viewCount += 1;
+    return toPostDetailResponse(post);
   }
 
-  async getBySlug(slug: string) {
-    const post = await Post.findOne({
-      where: { slug, publishedAt: { [Op.ne]: null } },
-      include: [Category, Tag],
-    });
-    if (!post) throw { status: 404, message: "Post not found" };
-    return post;
+  async adminList(
+    filters: AdminPostListFilters,
+  ): Promise<PaginatedResponse<PostSummaryResponse>> {
+    const { rows, count } = await this.repository.adminList(filters);
+    return pagination(
+      rows.map(toPostSummaryResponse),
+      count,
+      filters.page,
+      filters.limit,
+    );
   }
 
-  async adminList(page = 1, limit = 20, q?: string, includeDeleted = false) {
-    const where: any = {};
-    if (q) {
-      where[Op.or] = [
-        { title: { [Op.iLike]: `%${q}%` } },
-        { content: { [Op.iLike]: `%${q}%` } },
-      ];
+  private async transitionStatus(
+    postId: string,
+    status: PostStatus,
+  ): Promise<PostDetailResponse> {
+    return this.repository.transaction(async (transaction) => {
+      const post = await this.repository.findById(postId, { transaction });
+      if (!post) {
+        throw new NotFoundError("Post not found.");
+      }
+
+      const previousStatus = post.status;
+      applyStatus(post, status);
+      await this.repository.save(post, transaction);
+      if (
+        previousStatus === PostStatus.DRAFT &&
+        post.status === PostStatus.PUBLISHED
+      ) {
+        await this.newsletters.schedulePostPublished(post.id, transaction);
+      }
+
+      return toPostDetailResponse(
+        await this.getPersistedPost(post.id, transaction),
+      );
+    });
+  }
+
+  private async generateUniqueSlug(
+    source: string,
+    excludePostId: string | undefined,
+    transaction: Transaction,
+  ): Promise<string> {
+    const baseSlug = slugify(source);
+    let slug = baseSlug;
+    let suffix = 2;
+
+    while (await this.repository.slugExists(slug, excludePostId, transaction)) {
+      slug = `${baseSlug}-${suffix}`;
+      suffix += 1;
     }
-    const offset = (page - 1) * limit;
-    const { rows, count } = await Post.findAndCountAll({
-      where,
-      offset,
-      limit,
-      order: [["created_at", "DESC"]],
-      include: [Category, Tag],
-      paranoid: !includeDeleted,
+
+    return slug;
+  }
+
+  private async assertFeaturedImageExists(
+    featuredImageId: string | null | undefined,
+    transaction: Transaction,
+  ): Promise<void> {
+    if (typeof featuredImageId === "undefined" || featuredImageId === null) {
+      return;
+    }
+
+    const media = await this.media.findById(featuredImageId, transaction);
+    if (!media) {
+      throw new ValidationError([
+        {
+          field: "featuredImageId",
+          message: "Featured image does not exist.",
+        },
+      ]);
+    }
+  }
+
+  private async assertTaxonomyIdsExist(
+    categoryIds: string[] | undefined,
+    tagIds: string[] | undefined,
+    transaction: Transaction,
+  ): Promise<void> {
+    const errors: ValidationIssue[] = [];
+
+    if (
+      categoryIds &&
+      !(await this.repository.categoryIdsExist(categoryIds, transaction))
+    ) {
+      errors.push({
+        field: "categoryIds",
+        message: "One or more categories do not exist.",
+      });
+    }
+
+    if (tagIds && !(await this.repository.tagIdsExist(tagIds, transaction))) {
+      errors.push({
+        field: "tagIds",
+        message: "One or more tags do not exist.",
+      });
+    }
+
+    if (errors.length > 0) {
+      throw new ValidationError(errors);
+    }
+  }
+
+  private async getPersistedPost(
+    postId: string,
+    transaction: Transaction,
+  ): Promise<Post> {
+    const post = await this.repository.findById(postId, {
+      transaction,
+      withAssociations: true,
     });
-    return {
-      data: rows,
-      meta: { total: count, page, limit, pages: Math.ceil(count / limit) },
-    };
+
+    if (!post) {
+      throw new InternalServerError("Failed to load persisted post.");
+    }
+
+    return post;
   }
 }
 
-export default new PostService();
+const postService = new PostService();
+
+export default postService;

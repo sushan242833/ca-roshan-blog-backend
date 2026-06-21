@@ -9,6 +9,8 @@ import { env } from "./env";
 import authRoutes from "@routes/auth.routes";
 import postRoutes from "@routes/post.routes";
 import tagRoutes from "@routes/tag.routes";
+import subscriberRoutes from "@routes/subscriber.routes";
+import adminSubscriberRoutes from "@routes/admin-subscriber.routes";
 import mediaRoutes from "@modules/media/media.routes";
 import errorMiddleware from "@middleware/error.middleware";
 
@@ -51,7 +53,9 @@ app.get("/health", (_req: Request, res: Response) => {
 
 // Auth routes
 app.use("/api/auth", authRoutes);
-app.use("/api/posts", postRoutes);
+app.use("/api/v1/posts", postRoutes);
+app.use("/api/v1/subscribers", subscriberRoutes);
+app.use("/api/v1/admin/subscribers", adminSubscriberRoutes);
 app.use("/api/tags", tagRoutes);
 app.use("/api/v1/media", mediaRoutes);
 

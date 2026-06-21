@@ -5,12 +5,14 @@ import {
   DataType,
   Default,
   DeletedAt,
+  HasMany,
   Model,
   PrimaryKey,
   Table,
   UpdatedAt,
 } from "sequelize-typescript";
 import { Optional } from "sequelize";
+import Post from "@models/post.model";
 
 export enum MediaProvider {
   LOCAL = "LOCAL",
@@ -90,6 +92,9 @@ export class Media extends Model<MediaAttributes, MediaCreationAttributes> {
   @DeletedAt
   @Column({ field: "deleted_at", type: DataType.DATE })
   deletedAt?: Date | null;
+
+  @HasMany(() => Post)
+  featuredPosts?: Post[];
 }
 
 export default Media;

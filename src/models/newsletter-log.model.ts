@@ -15,19 +15,26 @@ import { Optional } from "sequelize";
 import Subscriber from "./subscriber.model";
 import Post from "@models/post.model";
 
+export enum NewsletterLogStatus {
+  PENDING = "PENDING",
+  SENT = "SENT",
+  FAILED = "FAILED",
+}
+
 export interface NewsletterLogAttributes {
   id: string;
-  subscriberId: string;
   postId: string;
-  status?: string | null;
+  subscriberId: string;
+  status: NewsletterLogStatus;
   sentAt?: Date | null;
+  errorMessage?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export type NewsletterLogCreationAttributes = Optional<
   NewsletterLogAttributes,
-  "id" | "status" | "sentAt" | "createdAt" | "updatedAt"
+  "id" | "status" | "sentAt" | "errorMessage" | "createdAt" | "updatedAt"
 >;
 
 @Table({ tableName: "newsletter_logs", timestamps: true, underscored: true })
@@ -40,23 +47,34 @@ export class NewsletterLog extends Model<
   @Column({ type: DataType.UUID })
   id!: string;
 
-  @ForeignKey(() => Subscriber)
-  @AllowNull(false)
-  @Column({ type: DataType.UUID, field: "subscriber_id" })
-  subscriberId!: string;
-
   @ForeignKey(() => Post)
   @AllowNull(false)
   @Column({ type: DataType.UUID, field: "post_id" })
   postId!: string;
 
-  @AllowNull(true)
-  @Column({ type: DataType.STRING })
-  status?: string | null;
+  @ForeignKey(() => Subscriber)
+  @AllowNull(false)
+  @Column({ type: DataType.UUID, field: "subscriber_id" })
+  subscriberId!: string;
+
+  @AllowNull(false)
+  @Default(NewsletterLogStatus.PENDING)
+  @Column({
+    type: DataType.ENUM(
+      NewsletterLogStatus.PENDING,
+      NewsletterLogStatus.SENT,
+      NewsletterLogStatus.FAILED,
+    ),
+  })
+  status!: NewsletterLogStatus;
 
   @AllowNull(true)
   @Column({ type: DataType.DATE, field: "sent_at" })
   sentAt?: Date | null;
+
+  @AllowNull(true)
+  @Column({ type: DataType.TEXT, field: "error_message" })
+  errorMessage?: string | null;
 
   @CreatedAt
   @Column({ field: "created_at" })
