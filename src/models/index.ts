@@ -7,6 +7,7 @@ import { Subscriber } from "./subscriber.model";
 import { NewsletterLog } from "./newsletter-log.model";
 import { PostCategory } from "./post-category.model";
 import { PostTag } from "./post-tag.model";
+import { Media } from "@modules/media/media.model";
 
 const models = [
   Admin,
@@ -17,6 +18,7 @@ const models = [
   NewsletterLog,
   PostCategory,
   PostTag,
+  Media,
 ];
 
 export function registerModels(instance = sequelize) {
@@ -33,4 +35,5 @@ export {
   NewsletterLog,
   PostCategory,
   PostTag,
+  Media,
 };

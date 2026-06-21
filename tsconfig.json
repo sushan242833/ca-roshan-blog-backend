@@ -22,7 +22,8 @@
       "@validation/*": ["validation/*"],
       "@types/*": ["types/*"],
       "@constants/*": ["constants/*"],
-      "@dto/*": ["dto/*"]
+      "@dto/*": ["dto/*"],
+      "@modules/*": ["modules/*"]
     },
     "skipLibCheck": true,
     "experimentalDecorators": true,

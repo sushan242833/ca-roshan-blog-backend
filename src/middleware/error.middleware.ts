@@ -1,25 +1,66 @@
 import { NextFunction, Request, Response } from "express";
 
-export interface AppError extends Error {
+interface AppErrorShape {
   status?: number;
+  statusCode?: number;
+  code?: string;
+  message?: string;
+  details?: unknown;
+  stack?: string;
+}
+
+function isAppErrorShape(value: unknown): value is AppErrorShape {
+  return typeof value === "object" && value !== null;
 }
 
 export function errorMiddleware(
-  err: AppError,
+  err: unknown,
   _req: Request,
   res: Response,
   _next: NextFunction,
 ) {
-  const status = err.status ?? 500;
-  const message = err.message ?? "Internal Server Error";
-  // In production, avoid leaking stack traces
-  const payload: { success: boolean; message: string; details?: unknown } = {
+  let status = 500;
+  let message = "Internal Server Error";
+  let code = "INTERNAL_SERVER_ERROR";
+  let details: unknown;
+
+  if (isAppErrorShape(err)) {
+    const candidateStatus = Number(err.statusCode ?? err.status);
+    if (
+      Number.isFinite(candidateStatus) &&
+      candidateStatus >= 400 &&
+      candidateStatus < 600
+    ) {
+      status = candidateStatus;
+    }
+
+    if (typeof err.message === "string" && err.message.length > 0) {
+      message = err.message;
+    }
+
+    if (typeof err.code === "string" && err.code.length > 0) {
+      code = err.code;
+    }
+
+    details = err.details;
+  }
+
+  const payload: {
+    success: boolean;
+    message: string;
+    error: { code: string; details?: unknown };
+  } = {
     success: false,
     message,
+    error: {
+      code,
+    },
   };
 
-  if (process.env.NODE_ENV === "development") {
-    payload.details = { stack: err.stack };
+  if (typeof details !== "undefined") {
+    payload.error.details = details;
+  } else if (process.env.NODE_ENV === "development" && isAppErrorShape(err)) {
+    payload.error.details = { stack: err.stack };
   }
 
   console.error(err);

@@ -13,6 +13,7 @@ export interface Env {
   DB_PASSWORD: string;
   JWT_SECRET: string;
   JWT_REFRESH_SECRET: string;
+  MEDIA_BASE_URL: string;
 }
 
 function getEnv(name: string, fallback?: string): string {
@@ -23,8 +24,10 @@ function getEnv(name: string, fallback?: string): string {
   return val as string;
 }
 
+const configuredPort = Number(getEnv("PORT", "4000"));
+
 const env: Env = {
-  PORT: Number(getEnv("PORT", "4000")),
+  PORT: configuredPort,
   NODE_ENV: getEnv("NODE_ENV", "development") as Env["NODE_ENV"],
   DB_HOST: getEnv("DB_HOST"),
   DB_PORT: Number(getEnv("DB_PORT", "5432")),
@@ -33,6 +36,7 @@ const env: Env = {
   DB_PASSWORD: getEnv("DB_PASSWORD"),
   JWT_SECRET: getEnv("JWT_SECRET"),
   JWT_REFRESH_SECRET: getEnv("JWT_REFRESH_SECRET"),
+  MEDIA_BASE_URL: getEnv("MEDIA_BASE_URL", `http://localhost:${configuredPort}`),
 };
 
 export { env };
