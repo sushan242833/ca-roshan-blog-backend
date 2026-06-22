@@ -3,7 +3,7 @@ import { sequelize, Tag } from "@models/index";
 import { CreateTagDto } from "@dto/create-tag.dto";
 import { UpdateTagDto } from "@dto/update-tag.dto";
 
-function slugify(input: string) {
+function slugify(input: string): string {
   return input
     .toString()
     .trim()
@@ -13,7 +13,7 @@ function slugify(input: string) {
 }
 
 class TagService {
-  async generateUniqueSlug(name: string) {
+  async generateUniqueSlug(name: string): Promise<string> {
     const base = slugify(name);
     let slug = base;
     let idx = 1;
@@ -25,7 +25,7 @@ class TagService {
     return slug;
   }
 
-  async create(dto: CreateTagDto) {
+  async create(dto: CreateTagDto): Promise<Tag> {
     return sequelize.transaction(async (t) => {
       const slug = dto.slug
         ? slugify(dto.slug)
@@ -40,7 +40,7 @@ class TagService {
     });
   }
 
-  async update(id: string, dto: UpdateTagDto) {
+  async update(id: string, dto: UpdateTagDto): Promise<Tag> {
     return sequelize.transaction(async (t) => {
       const tag = await Tag.findByPk(id, { transaction: t });
       if (!tag) throw { status: 404, message: "Tag not found" };
@@ -59,7 +59,7 @@ class TagService {
     });
   }
 
-  async delete(id: string) {
+  async delete(id: string): Promise<boolean> {
     return sequelize.transaction(async (t) => {
       const tag = await Tag.findByPk(id, { transaction: t });
       if (!tag) throw { status: 404, message: "Tag not found" };
@@ -68,7 +68,7 @@ class TagService {
     });
   }
 
-  async getAll() {
+  async getAll(): Promise<Tag[]> {
     const tags = await Tag.findAll({ order: [["name", "ASC"]] });
     return tags;
   }

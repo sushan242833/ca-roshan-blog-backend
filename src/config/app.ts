@@ -13,6 +13,7 @@ import subscriberRoutes from "@routes/subscriber.routes";
 import adminSubscriberRoutes from "@routes/admin-subscriber.routes";
 import mediaRoutes from "@modules/media/media.routes";
 import errorMiddleware from "@middleware/error.middleware";
+import { EmptyRequestBody, EmptyRequestParams } from "@app-types/http.requests";
 
 const app: Application = express();
 
@@ -47,9 +48,12 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // Health check
-app.get("/health", (_req: Request, res: Response) => {
+app.get(
+  "/health",
+  (_req: Request<EmptyRequestParams, unknown, EmptyRequestBody>, res: Response) => {
   return res.json({ success: true, message: "Server is running" });
-});
+  },
+);
 
 // Auth routes
 app.use("/api/auth", authRoutes);

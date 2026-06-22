@@ -1,11 +1,20 @@
 import { Request, Response, NextFunction } from "express";
 import authService from "@services/auth.service";
+import {
+  EmptyRequestBody,
+  EmptyRequestParams,
+  LoginRequest,
+} from "@app-types/http.requests";
 
 const COOKIE_NAME = "refreshToken";
 
-export async function login(req: Request, res: Response, next: NextFunction) {
+export async function login(
+  req: Request<EmptyRequestParams, unknown, LoginRequest>,
+  res: Response,
+  next: NextFunction,
+) {
   try {
-    const { email, password } = req.body as { email: string; password: string };
+    const { email, password } = req.body;
     const result = await authService.login(email, password);
     if (!result)
       return res
@@ -31,9 +40,13 @@ export async function login(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-export async function logout(req: Request, res: Response, next: NextFunction) {
+export async function logout(
+  req: Request<EmptyRequestParams, unknown, EmptyRequestBody>,
+  res: Response,
+  next: NextFunction,
+) {
   try {
-    const admin = (req as any).user;
+    const admin = req.user;
     if (!admin) return res.status(200).json({ success: true });
     await authService.logout(admin.id);
     res.clearCookie(COOKIE_NAME, {
@@ -47,7 +60,11 @@ export async function logout(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-export async function refresh(req: Request, res: Response, next: NextFunction) {
+export async function refresh(
+  req: Request<EmptyRequestParams, unknown, EmptyRequestBody>,
+  res: Response,
+  next: NextFunction,
+) {
   try {
     const token = req.cookies?.[COOKIE_NAME];
     if (!token)
@@ -77,9 +94,13 @@ export async function refresh(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-export async function me(req: Request, res: Response, next: NextFunction) {
+export async function me(
+  req: Request<EmptyRequestParams, unknown, EmptyRequestBody>,
+  res: Response,
+  next: NextFunction,
+) {
   try {
-    const admin = (req as any).user;
+    const admin = req.user;
     if (!admin)
       return res.status(401).json({ success: false, message: "Unauthorized" });
     const data = await authService.getMe(admin.id);

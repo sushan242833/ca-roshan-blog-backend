@@ -13,6 +13,10 @@ import {
   BadRequestError,
   UnsupportedMediaTypeError,
 } from "../media.errors";
+import {
+  EmptyRequestBody,
+  EmptyRequestParams,
+} from "@app-types/http.requests";
 
 const multerUpload = multer({
   storage: multer.memoryStorage(),
@@ -37,7 +41,7 @@ const multerUpload = multer({
 }).single("file");
 
 export function mediaUploadMiddleware(
-  req: Request,
+  req: Request<EmptyRequestParams, unknown, EmptyRequestBody>,
   res: Response,
   next: NextFunction,
 ): void {
@@ -63,7 +67,12 @@ export function mediaUploadMiddleware(
         buffer: req.file.buffer,
       };
 
-      const mediaRequest = req as Request & MediaUploadRequestShape;
+      const mediaRequest = req as Request<
+        EmptyRequestParams,
+        unknown,
+        EmptyRequestBody
+      > &
+        MediaUploadRequestShape;
       mediaRequest.mediaUploadFile = dto;
       return next();
     } catch (dtoError: unknown) {

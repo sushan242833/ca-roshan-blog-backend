@@ -1,13 +1,24 @@
 import { NextFunction, Request, Response } from "express";
-import { CreateSubscriberDto } from "@dto/subscriber.dto";
 import { ValidationError } from "@errors/http-error";
 import { SubscriberStatus } from "@models/subscriber.model";
 import newsletterService from "@services/newsletter.service";
+import {
+  EmptyRequestBody,
+  EmptyRequestParams,
+  SubscribeRequest,
+  VerifySubscriberRequest,
+} from "@app-types/http.requests";
 
 const DEFAULT_ADMIN_LIMIT = 20;
 const MAX_LIMIT = 100;
 
-function getQueryString(value: Request["query"][string]): string | undefined {
+type RequestQuery = Request<
+  EmptyRequestParams,
+  unknown,
+  EmptyRequestBody
+>["query"];
+
+function getQueryString(value: RequestQuery[string]): string | undefined {
   if (typeof value === "string") {
     return value;
   }
@@ -20,7 +31,7 @@ function getQueryString(value: Request["query"][string]): string | undefined {
 }
 
 function getPositiveIntegerQuery(
-  req: Request,
+  req: { query: RequestQuery },
   field: string,
   fallback: number,
   max?: number,
@@ -40,7 +51,7 @@ function getPositiveIntegerQuery(
   return typeof max === "number" ? Math.min(parsed, max) : parsed;
 }
 
-function getStatusQuery(req: Request): SubscriberStatus | undefined {
+function getStatusQuery(req: { query: RequestQuery }): SubscriberStatus | undefined {
   const rawValue = getQueryString(req.query.status);
   if (typeof rawValue === "undefined") {
     return undefined;
@@ -59,14 +70,12 @@ function getStatusQuery(req: Request): SubscriberStatus | undefined {
 }
 
 export async function createSubscriber(
-  req: Request,
+  req: Request<EmptyRequestParams, unknown, SubscribeRequest>,
   res: Response,
   next: NextFunction,
 ) {
   try {
-    const subscriber = await newsletterService.subscribe(
-      req.body as CreateSubscriberDto,
-    );
+    const subscriber = await newsletterService.subscribe(req.body);
     return res.status(201).json({ success: true, data: subscriber });
   } catch (err) {
     return next(err);
@@ -74,7 +83,7 @@ export async function createSubscriber(
 }
 
 export async function verifySubscriber(
-  req: Request,
+  req: Request<VerifySubscriberRequest, unknown, EmptyRequestBody>,
   res: Response,
   next: NextFunction,
 ) {
@@ -87,7 +96,7 @@ export async function verifySubscriber(
 }
 
 export async function unsubscribeSubscriber(
-  req: Request,
+  req: Request<VerifySubscriberRequest, unknown, EmptyRequestBody>,
   res: Response,
   next: NextFunction,
 ) {
@@ -100,7 +109,7 @@ export async function unsubscribeSubscriber(
 }
 
 export async function adminListSubscribers(
-  req: Request,
+  req: Request<EmptyRequestParams, unknown, EmptyRequestBody>,
   res: Response,
   next: NextFunction,
 ) {
@@ -118,7 +127,7 @@ export async function adminListSubscribers(
 }
 
 export async function adminSubscriberStats(
-  _req: Request,
+  _req: Request<EmptyRequestParams, unknown, EmptyRequestBody>,
   res: Response,
   next: NextFunction,
 ) {

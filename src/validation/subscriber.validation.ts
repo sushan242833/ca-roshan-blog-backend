@@ -1,5 +1,9 @@
 import { NextFunction, Request, Response } from "express";
 import { ValidationError, ValidationIssue } from "@errors/http-error";
+import {
+  EmptyRequestParams,
+  VerifySubscriberRequest,
+} from "@app-types/http.requests";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const TOKEN_REGEX = /^[a-zA-Z0-9_-]{32,255}$/;
@@ -9,11 +13,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function validateCreateSubscriber(
-  req: Request,
+  req: Request<EmptyRequestParams, unknown, unknown>,
   _res: Response,
   next: NextFunction,
 ) {
-  const body = req.body as unknown;
+  const body = req.body;
   const errors: ValidationIssue[] = [];
 
   if (!isRecord(body)) {
@@ -42,7 +46,7 @@ export function validateCreateSubscriber(
 }
 
 export function validateSubscriberToken(
-  req: Request,
+  req: Request<VerifySubscriberRequest, unknown, unknown>,
   _res: Response,
   next: NextFunction,
 ) {

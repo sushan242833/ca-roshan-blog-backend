@@ -1,9 +1,9 @@
-import type { Admin } from "@models/admin.model";
+import type { AuthenticatedAdmin } from "./authenticated-admin";
 
 declare global {
   namespace Express {
     interface Request {
-      user?: { id: string; email: string } | Admin;
+      user?: AuthenticatedAdmin;
     }
   }
 }

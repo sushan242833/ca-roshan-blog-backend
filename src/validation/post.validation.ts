@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { ValidationError, ValidationIssue } from "@errors/http-error";
 import { PostStatus } from "@models/post.model";
+import { EmptyRequestParams, IdRequestParams } from "@app-types/http.requests";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -126,11 +127,11 @@ function validateSeoLengths(
 }
 
 function validatePostBody(
-  req: Request,
+  req: Request<EmptyRequestParams | IdRequestParams, unknown, unknown>,
   requiredFields: string[],
   next: NextFunction,
 ): void {
-  const body = req.body as unknown;
+  const body = req.body;
   const errors: ValidationIssue[] = [];
 
   if (!isRecord(body)) {
@@ -164,7 +165,7 @@ function validatePostBody(
 }
 
 export function validateCreatePost(
-  req: Request,
+  req: Request<EmptyRequestParams, unknown, unknown>,
   _res: Response,
   next: NextFunction,
 ) {
@@ -172,7 +173,7 @@ export function validateCreatePost(
 }
 
 export function validateUpdatePost(
-  req: Request,
+  req: Request<IdRequestParams, unknown, unknown>,
   _res: Response,
   next: NextFunction,
 ) {

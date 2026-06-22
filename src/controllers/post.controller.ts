@@ -1,14 +1,27 @@
 import { Request, Response, NextFunction } from "express";
-import { CreatePostDto } from "@dto/create-post.dto";
-import { UpdatePostDto } from "@dto/update-post.dto";
 import { UnauthorizedError, ValidationError } from "@errors/http-error";
 import postService from "@services/post.service";
+import { AuthenticatedAdmin } from "@app-types/authenticated-admin";
+import {
+  CreatePostRequest,
+  EmptyRequestBody,
+  EmptyRequestParams,
+  IdRequestParams,
+  SlugRequestParams,
+  UpdatePostRequest,
+} from "@app-types/http.requests";
 
 const DEFAULT_PUBLIC_LIMIT = 10;
 const DEFAULT_ADMIN_LIMIT = 20;
 const MAX_LIMIT = 100;
 
-function getQueryString(value: Request["query"][string]): string | undefined {
+type RequestQuery = Request<
+  EmptyRequestParams,
+  unknown,
+  EmptyRequestBody
+>["query"];
+
+function getQueryString(value: RequestQuery[string]): string | undefined {
   if (typeof value === "string") {
     return value;
   }
@@ -20,12 +33,12 @@ function getQueryString(value: Request["query"][string]): string | undefined {
   return undefined;
 }
 
-function getSearchQuery(req: Request): string | undefined {
+function getSearchQuery(req: { query: RequestQuery }): string | undefined {
   return getQueryString(req.query.search) ?? getQueryString(req.query.q);
 }
 
 function getPositiveIntegerQuery(
-  req: Request,
+  req: { query: RequestQuery },
   field: string,
   fallback: number,
   max?: number,
@@ -45,7 +58,10 @@ function getPositiveIntegerQuery(
   return typeof max === "number" ? Math.min(parsed, max) : parsed;
 }
 
-function getBooleanQuery(req: Request, field: string): boolean | undefined {
+function getBooleanQuery(
+  req: { query: RequestQuery },
+  field: string,
+): boolean | undefined {
   const rawValue = getQueryString(req.query[field]);
   if (typeof rawValue === "undefined") {
     return undefined;
@@ -64,7 +80,7 @@ function getBooleanQuery(req: Request, field: string): boolean | undefined {
   ]);
 }
 
-function getAdminId(req: Request): string {
+function getAdminId(req: { user?: AuthenticatedAdmin }): string {
   if (!req.user?.id) {
     throw new UnauthorizedError("Admin authentication is required.");
   }
@@ -73,15 +89,12 @@ function getAdminId(req: Request): string {
 }
 
 export async function createPost(
-  req: Request,
+  req: Request<EmptyRequestParams, unknown, CreatePostRequest>,
   res: Response,
   next: NextFunction,
 ) {
   try {
-    const post = await postService.create(
-      getAdminId(req),
-      req.body as CreatePostDto,
-    );
+    const post = await postService.create(getAdminId(req), req.body);
     return res.status(201).json({ success: true, data: post });
   } catch (err) {
     return next(err);
@@ -89,12 +102,12 @@ export async function createPost(
 }
 
 export async function updatePost(
-  req: Request,
+  req: Request<IdRequestParams, unknown, UpdatePostRequest>,
   res: Response,
   next: NextFunction,
 ) {
   try {
-    const post = await postService.update(req.params.id, req.body as UpdatePostDto);
+    const post = await postService.update(req.params.id, req.body);
     return res.json({ success: true, data: post });
   } catch (err) {
     return next(err);
@@ -102,7 +115,7 @@ export async function updatePost(
 }
 
 export async function deletePost(
-  req: Request,
+  req: Request<IdRequestParams, unknown, EmptyRequestBody>,
   res: Response,
   next: NextFunction,
 ) {
@@ -115,7 +128,7 @@ export async function deletePost(
 }
 
 export async function restorePost(
-  req: Request,
+  req: Request<IdRequestParams, unknown, EmptyRequestBody>,
   res: Response,
   next: NextFunction,
 ) {
@@ -128,7 +141,7 @@ export async function restorePost(
 }
 
 export async function publishPost(
-  req: Request,
+  req: Request<IdRequestParams, unknown, EmptyRequestBody>,
   res: Response,
   next: NextFunction,
 ) {
@@ -141,7 +154,7 @@ export async function publishPost(
 }
 
 export async function archivePost(
-  req: Request,
+  req: Request<IdRequestParams, unknown, EmptyRequestBody>,
   res: Response,
   next: NextFunction,
 ) {
@@ -154,7 +167,7 @@ export async function archivePost(
 }
 
 export async function unpublishPost(
-  req: Request,
+  req: Request<IdRequestParams, unknown, EmptyRequestBody>,
   res: Response,
   next: NextFunction,
 ) {
@@ -167,7 +180,7 @@ export async function unpublishPost(
 }
 
 export async function listPublished(
-  req: Request,
+  req: Request<EmptyRequestParams, unknown, EmptyRequestBody>,
   res: Response,
   next: NextFunction,
 ) {
@@ -187,7 +200,7 @@ export async function listPublished(
 }
 
 export async function listFeatured(
-  req: Request,
+  req: Request<EmptyRequestParams, unknown, EmptyRequestBody>,
   res: Response,
   next: NextFunction,
 ) {
@@ -203,7 +216,7 @@ export async function listFeatured(
 }
 
 export async function getBySlug(
-  req: Request,
+  req: Request<SlugRequestParams, unknown, EmptyRequestBody>,
   res: Response,
   next: NextFunction,
 ) {
@@ -216,7 +229,7 @@ export async function getBySlug(
 }
 
 export async function adminList(
-  req: Request,
+  req: Request<EmptyRequestParams, unknown, EmptyRequestBody>,
   res: Response,
   next: NextFunction,
 ) {

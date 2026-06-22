@@ -11,11 +11,21 @@ interface Tokens {
   refreshToken: string;
 }
 
+interface AuthenticatedAdminResponse {
+  id: string;
+  email: string;
+}
+
+interface LoginResponse {
+  admin: AuthenticatedAdminResponse;
+  tokens: Tokens;
+}
+
 export class AuthService {
   public async login(
     email: string,
     password: string,
-  ): Promise<{ admin: Partial<Admin>; tokens: Tokens } | null> {
+  ): Promise<LoginResponse | null> {
     const admin = await Admin.findOne({ where: { email } });
     if (!admin) return null;
 
@@ -30,11 +40,14 @@ export class AuthService {
     admin.refreshTokenHash = refreshTokenHash;
     await admin.save();
 
-    const safeAdmin = { id: admin.id, email: admin.email } as Partial<Admin>;
+    const safeAdmin: AuthenticatedAdminResponse = {
+      id: admin.id,
+      email: admin.email,
+    };
     return { admin: safeAdmin, tokens: { accessToken, refreshToken } };
   }
 
-  public async logout(adminId: string) {
+  public async logout(adminId: string): Promise<void> {
     const admin = await Admin.findByPk(adminId);
     if (!admin) return;
     admin.refreshTokenHash = null;
@@ -56,12 +69,12 @@ export class AuthService {
       admin.refreshTokenHash = await hashValue(newRefresh);
       await admin.save();
       return { accessToken: newAccess, refreshToken: newRefresh };
-    } catch (err) {
+    } catch (_error: unknown) {
       return null;
     }
   }
 
-  public async getMe(adminId: string) {
+  public async getMe(adminId: string): Promise<Admin | null> {
     const admin = await Admin.findByPk(adminId, {
       attributes: ["id", "email", "createdAt", "updatedAt"],
     });

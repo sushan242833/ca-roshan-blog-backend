@@ -1,9 +1,13 @@
 import { NextFunction, Request, Response } from "express";
+import { ParamsDictionary } from "express-serve-static-core";
 import { verifyAccessToken } from "@utils/jwt";
 import { Admin } from "@models/index";
+import { AuthenticatedAdmin } from "@app-types/authenticated-admin";
+
+const ADMIN_ROLE = "admin";
 
 export const authMiddleware = async (
-  req: Request,
+  req: Request<ParamsDictionary, unknown, unknown>,
   res: Response,
   next: NextFunction,
 ) => {
@@ -25,9 +29,14 @@ export const authMiddleware = async (
     });
     if (!admin)
       return res.status(401).json({ success: false, message: "Invalid token" });
-    req.user = { id: admin.id, email: admin.email };
+    const authenticatedAdmin: AuthenticatedAdmin = {
+      id: admin.id,
+      email: admin.email,
+      role: ADMIN_ROLE,
+    };
+    req.user = authenticatedAdmin;
     return next();
-  } catch (err) {
+  } catch (_error: unknown) {
     return res.status(401).json({ success: false, message: "Unauthorized" });
   }
 };

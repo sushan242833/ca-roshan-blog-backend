@@ -7,19 +7,19 @@ export interface TokenPayload {
   exp?: number;
 }
 
-export function signAccessToken(payload: object) {
+export function signAccessToken(payload: object): string {
   return jwt.sign(payload, env.JWT_SECRET, { expiresIn: "15m" });
 }
 
-export function signRefreshToken(payload: object) {
+export function signRefreshToken(payload: object): string {
   return jwt.sign(payload, env.JWT_REFRESH_SECRET, { expiresIn: "7d" });
 }
 
-export function verifyAccessToken(token: string) {
+export function verifyAccessToken(token: string): TokenPayload {
   return jwt.verify(token, env.JWT_SECRET) as TokenPayload;
 }
 
-export function verifyRefreshToken(token: string) {
+export function verifyRefreshToken(token: string): TokenPayload {
   return jwt.verify(token, env.JWT_REFRESH_SECRET) as TokenPayload;
 }
 

@@ -3,7 +3,7 @@ import { sequelize, Category } from "@models/index";
 import { CreateCategoryDto } from "@dto/create-category.dto";
 import { UpdateCategoryDto } from "@dto/update-category.dto";
 
-function slugify(input: string) {
+function slugify(input: string): string {
   return input
     .toString()
     .trim()
@@ -13,7 +13,7 @@ function slugify(input: string) {
 }
 
 class CategoryService {
-  async generateUniqueSlug(name: string) {
+  async generateUniqueSlug(name: string): Promise<string> {
     const base = slugify(name);
     let slug = base;
     let idx = 1;
@@ -25,7 +25,7 @@ class CategoryService {
     return slug;
   }
 
-  async create(dto: CreateCategoryDto) {
+  async create(dto: CreateCategoryDto): Promise<Category> {
     return sequelize.transaction(async (t) => {
       const slug = dto.slug
         ? slugify(dto.slug)
@@ -44,7 +44,7 @@ class CategoryService {
     });
   }
 
-  async update(id: string, dto: UpdateCategoryDto) {
+  async update(id: string, dto: UpdateCategoryDto): Promise<Category> {
     return sequelize.transaction(async (t) => {
       const category = await Category.findByPk(id, { transaction: t });
       if (!category) throw { status: 404, message: "Category not found" };
@@ -64,7 +64,7 @@ class CategoryService {
     });
   }
 
-  async delete(id: string) {
+  async delete(id: string): Promise<boolean> {
     return sequelize.transaction(async (t) => {
       const category = await Category.findByPk(id, { transaction: t });
       if (!category) throw { status: 404, message: "Category not found" };
@@ -73,12 +73,12 @@ class CategoryService {
     });
   }
 
-  async getAll() {
+  async getAll(): Promise<Category[]> {
     const categories = await Category.findAll({ order: [["name", "ASC"]] });
     return categories;
   }
 
-  async getBySlug(slug: string) {
+  async getBySlug(slug: string): Promise<Category> {
     const category = await Category.findOne({ where: { slug } });
     if (!category) throw { status: 404, message: "Category not found" };
     return category;

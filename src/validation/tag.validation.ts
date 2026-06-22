@@ -1,11 +1,17 @@
 import { Request, Response, NextFunction } from "express";
+import { EmptyRequestParams, IdRequestParams } from "@app-types/http.requests";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
 
 export function validateCreateTag(
-  req: Request,
+  req: Request<EmptyRequestParams, unknown, unknown>,
   _res: Response,
   next: NextFunction,
 ) {
-  const { name } = req.body ?? {};
+  const body = req.body;
+  const name = isRecord(body) ? body.name : undefined;
   const errors: string[] = [];
   if (!name || typeof name !== "string") errors.push("name is required");
   if (errors.length)
@@ -14,11 +20,14 @@ export function validateCreateTag(
 }
 
 export function validateUpdateTag(
-  req: Request,
+  req: Request<IdRequestParams, unknown, unknown>,
   _res: Response,
   next: NextFunction,
 ) {
-  const { name, slug } = req.body ?? {};
+  const body = req.body;
+  const name = isRecord(body) ? body.name : undefined;
+  const slug = isRecord(body) ? body.slug : undefined;
+
   if (name && typeof name !== "string")
     return next({ status: 400, message: "Invalid name" });
   if (slug && typeof slug !== "string")

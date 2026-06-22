@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from "express";
+import { EmptyRequestBody, EmptyRequestParams } from "@app-types/http.requests";
 
 interface AppErrorShape {
   status?: number;
@@ -15,7 +16,7 @@ function isAppErrorShape(value: unknown): value is AppErrorShape {
 
 export function errorMiddleware(
   err: unknown,
-  _req: Request,
+  _req: Request<EmptyRequestParams, unknown, EmptyRequestBody>,
   res: Response,
   _next: NextFunction,
 ) {
