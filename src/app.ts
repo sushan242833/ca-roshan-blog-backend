@@ -10,11 +10,13 @@ import { env } from "@config/env";
 import authRoutes from "@routes/auth.routes";
 import postRoutes from "@routes/post.routes";
 import tagRoutes from "@routes/tag.routes";
+import categoryRoutes from "@routes/category.routes";
 import subscriberRoutes from "@routes/subscriber.routes";
 import adminSubscriberRoutes from "@routes/admin-subscriber.routes";
 import mediaRoutes from "@modules/media/media.routes";
 import errorMiddleware from "@middleware/error.middleware";
 import { EmptyRequestBody, EmptyRequestParams } from "@app-types/http.requests";
+import { setupSwagger } from "@config/swagger";
 
 const app: Application = express();
 
@@ -43,7 +45,6 @@ const limiter = rateLimit({
   max: env.NODE_ENV === "test" ? 1000 : 100,
 });
 app.use(limiter);
-
 app.get(
   "/health",
   (
@@ -58,9 +59,11 @@ app.use("/api/auth", authRoutes);
 app.use("/api/v1/posts", postRoutes);
 app.use("/api/v1/subscribers", subscriberRoutes);
 app.use("/api/v1/admin/subscribers", adminSubscriberRoutes);
+app.use("/api/categories", categoryRoutes);
 app.use("/api/tags", tagRoutes);
 app.use("/api/v1/media", mediaRoutes);
 
+setupSwagger(app);
 app.use(errorMiddleware);
 
 export default app;

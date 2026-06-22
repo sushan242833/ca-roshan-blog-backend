@@ -15,8 +15,6 @@ import {
 } from "@app-types/http.requests";
 
 const router = Router();
-
-// Public
 router.get<EmptyRequestParams, unknown, EmptyRequestBody>(
   "/",
   controller.listPublished,
@@ -25,8 +23,6 @@ router.get<EmptyRequestParams, unknown, EmptyRequestBody>(
   "/featured",
   controller.listFeatured,
 );
-
-// Admin
 router.get<EmptyRequestParams, unknown, EmptyRequestBody>(
   "/admin/list",
   authMiddleware,
@@ -37,6 +33,12 @@ router.post<EmptyRequestParams, unknown, CreatePostRequest>(
   authMiddleware,
   validateCreatePost,
   controller.createPost,
+);
+router.patch<IdRequestParams, unknown, UpdatePostRequest>(
+  "/:id",
+  authMiddleware,
+  validateUpdatePost,
+  controller.updatePost,
 );
 router.put<IdRequestParams, unknown, UpdatePostRequest>(
   "/:id",
@@ -69,7 +71,6 @@ router.post<IdRequestParams, unknown, EmptyRequestBody>(
   authMiddleware,
   controller.unpublishPost,
 );
-
 router.get<SlugRequestParams, unknown, EmptyRequestBody>(
   "/:slug",
   controller.getBySlug,

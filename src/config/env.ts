@@ -13,7 +13,7 @@ if (runtimeNodeEnv === "test") {
 
 export interface Env {
   PORT: number;
-  NODE_ENV: "development" | "production" | "test";
+  NODE_ENV: "development" | "production" | "staging" | "test";
   DB_HOST: string;
   DB_PORT: number;
   DB_NAME: string;

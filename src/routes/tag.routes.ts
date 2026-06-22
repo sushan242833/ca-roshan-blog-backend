@@ -14,7 +14,6 @@ import {
 } from "@app-types/http.requests";
 
 const router = Router();
-
 router.get<EmptyRequestParams, unknown, EmptyRequestBody>(
   "/",
   TagController.listTags,
@@ -26,6 +25,12 @@ router.post<EmptyRequestParams, unknown, CreateTagDto>(
   authMiddleware,
   validateCreateTag,
   TagController.createTag,
+);
+router.patch<IdRequestParams, unknown, UpdateTagDto>(
+  "/:id",
+  authMiddleware,
+  validateUpdateTag,
+  TagController.updateTag,
 );
 router.put<IdRequestParams, unknown, UpdateTagDto>(
   "/:id",

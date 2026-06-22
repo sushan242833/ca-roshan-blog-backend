@@ -12,7 +12,6 @@ import {
 } from "@app-types/http.requests";
 
 const router = Router();
-
 router.post<EmptyRequestParams, unknown, SubscribeRequest>(
   "/",
   validateCreateSubscriber,
