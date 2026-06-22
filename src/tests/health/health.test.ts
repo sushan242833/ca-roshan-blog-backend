@@ -21,7 +21,7 @@ describe("health", () => {
   });
 
   it("returns a healthy response", async () => {
-    const response = await createTestRequest().get("/health").expect(200);
+    const response = await createTestRequest().get("/api/v1/health").expect(200);
     const body = response.body as HealthResponseBody;
 
     assert.equal(body.success, true);

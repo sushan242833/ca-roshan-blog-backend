@@ -1,7 +1,7 @@
 import type { PathCollection } from "../types";
 
 export const authPaths: PathCollection = {
-  "/api/auth/login": {
+  "/api/v1/auth/login": {
     "post": {
       "tags": [
         "Auth"
@@ -73,7 +73,7 @@ export const authPaths: PathCollection = {
       }
     }
   },
-  "/api/auth/logout": {
+  "/api/v1/auth/logout": {
     "post": {
       "tags": [
         "Auth"
@@ -97,7 +97,7 @@ export const authPaths: PathCollection = {
       }
     }
   },
-  "/api/auth/refresh": {
+  "/api/v1/auth/refresh": {
     "post": {
       "tags": [
         "Auth"
@@ -147,7 +147,7 @@ export const authPaths: PathCollection = {
       }
     }
   },
-  "/api/auth/me": {
+  "/api/v1/auth/me": {
     "get": {
       "tags": [
         "Auth"

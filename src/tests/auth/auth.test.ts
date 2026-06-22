@@ -31,7 +31,7 @@ describe("auth", () => {
     const admin = await createAdmin();
 
     const response = await createTestRequest()
-      .post("/api/auth/login")
+      .post("/api/v1/auth/login")
       .send({ email: admin.email, password: admin.password })
       .expect(200);
     const body = response.body as LoginResponseBody;

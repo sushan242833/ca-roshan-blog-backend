@@ -45,22 +45,22 @@ const limiter = rateLimit({
   max: env.NODE_ENV === "test" ? 1000 : 100,
 });
 app.use(limiter);
-app.get(
-  "/health",
-  (
-    _req: Request<EmptyRequestParams, unknown, EmptyRequestBody>,
-    res: Response,
-  ) => {
-    return res.json({ success: true, message: "Server is running" });
-  },
-);
+const healthHandler = (
+  _req: Request<EmptyRequestParams, unknown, EmptyRequestBody>,
+  res: Response,
+) => {
+  return res.json({ success: true, message: "Server is running" });
+};
 
-app.use("/api/auth", authRoutes);
+app.get("/health", healthHandler);
+app.get("/api/v1/health", healthHandler);
+
+app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/posts", postRoutes);
 app.use("/api/v1/subscribers", subscriberRoutes);
 app.use("/api/v1/admin/subscribers", adminSubscriberRoutes);
-app.use("/api/categories", categoryRoutes);
-app.use("/api/tags", tagRoutes);
+app.use("/api/v1/categories", categoryRoutes);
+app.use("/api/v1/tags", tagRoutes);
 app.use("/api/v1/media", mediaRoutes);
 
 setupSwagger(app);

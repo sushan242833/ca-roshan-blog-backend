@@ -20,6 +20,7 @@ import { postSchemas } from "./schemas/post.schema";
 import { tagSchemas } from "./schemas/tag.schema";
 
 const docsPath = "/api/docs";
+const legacyDocsPath = "/api-docs";
 const swaggerEnabledNodeEnvironments = new Set<string>([
   "development",
   "staging",
@@ -130,9 +131,13 @@ export function setupSwagger(app: Application): void {
     res.setHeader("Content-Type", "application/json");
     return res.send(swaggerSpec);
   });
+  app.get(`${legacyDocsPath}.json`, (_req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    return res.send(swaggerSpec);
+  });
 
   app.use(
-    docsPath,
+    [docsPath, legacyDocsPath],
     removeSwaggerContentSecurityPolicy,
     ...swaggerUi.serve,
     swaggerUi.setup(swaggerSpec, {
@@ -146,7 +151,7 @@ export function setupSwagger(app: Application): void {
     }),
   );
 
-  console.log(`Swagger docs available at ${docsPath}`);
+  console.log(`Swagger docs available at ${docsPath} and ${legacyDocsPath}`);
 }
 
 export default swaggerSpec;

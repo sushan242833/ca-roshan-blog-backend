@@ -1,7 +1,7 @@
 import type { PathCollection } from "../types";
 
 export const categoryPaths: PathCollection = {
-  "/api/categories": {
+  "/api/v1/categories": {
     "get": {
       "tags": [
         "Categories"
@@ -86,7 +86,7 @@ export const categoryPaths: PathCollection = {
       }
     }
   },
-  "/api/categories/{id}": {
+  "/api/v1/categories/{id}": {
     "patch": {
       "tags": [
         "Categories"

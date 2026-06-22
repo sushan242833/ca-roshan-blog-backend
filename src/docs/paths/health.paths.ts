@@ -1,7 +1,7 @@
 import type { PathCollection } from "../types";
 
 export const healthPaths: PathCollection = {
-  "/health": {
+  "/api/v1/health": {
     "get": {
       "tags": [
         "Health"
