@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import app from "@config/app";
+import app from "./app";
 import sequelize from "@config/config";
 import { env } from "@config/env";
 import { registerModels } from "@models/index";

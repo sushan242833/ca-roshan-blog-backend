@@ -10,7 +10,9 @@
     "start": "node --require ./dist/register-paths.js dist/index.js",
     "db:migrate": "npm run build && node --require ./dist/register-paths.js dist/database/migrate.js",
     "db:seed-admin": "npm run build && node --require ./dist/register-paths.js dist/database/seed-admin.js",
-    "test": "npm run build && node --test dist/**/*.test.js"
+    "test": "npm run build && NODE_ENV=test node --require ./dist/register-paths.js --test --test-concurrency=1 \"dist/tests/**/*.test.js\"",
+    "test:watch": "npm run build && NODE_ENV=test node --require ./dist/register-paths.js --test --watch --test-concurrency=1 \"dist/tests/**/*.test.js\"",
+    "test:coverage": "npm run build && NODE_ENV=test node --require ./dist/register-paths.js --test --experimental-test-coverage --test-concurrency=1 \"dist/tests/**/*.test.js\""
   },
   "dependencies": {
     "bcrypt": "^5.1.0",

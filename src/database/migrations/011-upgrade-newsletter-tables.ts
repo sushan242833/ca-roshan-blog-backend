@@ -72,7 +72,15 @@ export async function up(queryInterface: QueryInterface) {
         DECLARE
           has_verified boolean;
           has_subscribed_at boolean;
+          subscriber_status_udt_name text;
         BEGIN
+          SELECT udt_name
+          INTO subscriber_status_udt_name
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'subscribers'
+            AND column_name = 'status';
+
           SELECT EXISTS (
             SELECT 1
             FROM information_schema.columns
@@ -89,7 +97,20 @@ export async function up(queryInterface: QueryInterface) {
               AND column_name = 'subscribed_at'
           ) INTO has_subscribed_at;
 
-          IF has_verified THEN
+          IF has_verified AND subscriber_status_udt_name = 'enum_subscribers_status' THEN
+            EXECUTE '
+              UPDATE subscribers
+              SET status = CASE
+                WHEN status::text = ''ACTIVE''
+                  THEN ''ACTIVE''::"enum_subscribers_status"
+                WHEN status::text = ''UNSUBSCRIBED''
+                  THEN ''UNSUBSCRIBED''::"enum_subscribers_status"
+                WHEN COALESCE(verified, false)
+                  THEN ''ACTIVE''::"enum_subscribers_status"
+                ELSE ''PENDING''::"enum_subscribers_status"
+              END
+            ';
+          ELSIF has_verified THEN
             EXECUTE '
               UPDATE subscribers
               SET status = CASE
@@ -98,6 +119,17 @@ export async function up(queryInterface: QueryInterface) {
                 WHEN COALESCE(verified, false)
                   THEN ''ACTIVE''
                 ELSE ''PENDING''
+              END
+            ';
+          ELSIF subscriber_status_udt_name = 'enum_subscribers_status' THEN
+            EXECUTE '
+              UPDATE subscribers
+              SET status = CASE
+                WHEN status::text = ''ACTIVE''
+                  THEN ''ACTIVE''::"enum_subscribers_status"
+                WHEN status::text = ''UNSUBSCRIBED''
+                  THEN ''UNSUBSCRIBED''::"enum_subscribers_status"
+                ELSE ''PENDING''::"enum_subscribers_status"
               END
             ';
           ELSE
@@ -171,10 +203,29 @@ export async function up(queryInterface: QueryInterface) {
 
     await queryInterface.sequelize.query(
       `
-        UPDATE newsletter_logs
-        SET status = 'PENDING'
-        WHERE status::text NOT IN ('PENDING', 'SENT', 'FAILED')
-          OR status IS NULL;
+        DO $$
+        DECLARE
+          newsletter_log_status_udt_name text;
+        BEGIN
+          SELECT udt_name
+          INTO newsletter_log_status_udt_name
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'newsletter_logs'
+            AND column_name = 'status';
+
+          IF newsletter_log_status_udt_name = 'enum_newsletter_logs_status' THEN
+            UPDATE newsletter_logs
+            SET status = 'PENDING'::"enum_newsletter_logs_status"
+            WHERE status::text NOT IN ('PENDING', 'SENT', 'FAILED')
+              OR status IS NULL;
+          ELSE
+            UPDATE newsletter_logs
+            SET status = 'PENDING'
+            WHERE status::text NOT IN ('PENDING', 'SENT', 'FAILED')
+              OR status IS NULL;
+          END IF;
+        END $$;
 
         ALTER TABLE newsletter_logs
           ALTER COLUMN status TYPE "enum_newsletter_logs_status"

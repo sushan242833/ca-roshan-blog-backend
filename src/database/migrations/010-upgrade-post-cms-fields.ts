@@ -78,14 +78,35 @@ export async function up(queryInterface: QueryInterface) {
 
     await queryInterface.sequelize.query(
       `
-        UPDATE posts
-        SET
-          status = CASE
-            WHEN published_at IS NOT NULL THEN 'PUBLISHED'
-            ELSE 'DRAFT'
-          END
-        WHERE status IS NULL
-          OR status::text NOT IN ('DRAFT', 'PUBLISHED', 'ARCHIVED');
+        DO $$
+        DECLARE
+          status_udt_name text;
+        BEGIN
+          SELECT udt_name
+          INTO status_udt_name
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'posts'
+            AND column_name = 'status';
+
+          IF status_udt_name = 'enum_posts_status' THEN
+            UPDATE posts
+            SET status = CASE
+              WHEN published_at IS NOT NULL THEN 'PUBLISHED'::"enum_posts_status"
+              ELSE 'DRAFT'::"enum_posts_status"
+            END
+            WHERE status IS NULL
+              OR status::text NOT IN ('DRAFT', 'PUBLISHED', 'ARCHIVED');
+          ELSE
+            UPDATE posts
+            SET status = CASE
+              WHEN published_at IS NOT NULL THEN 'PUBLISHED'
+              ELSE 'DRAFT'
+            END
+            WHERE status IS NULL
+              OR status::text NOT IN ('DRAFT', 'PUBLISHED', 'ARCHIVED');
+          END IF;
+        END $$;
 
         UPDATE posts
         SET reading_time = GREATEST(

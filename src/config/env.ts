@@ -1,7 +1,15 @@
 import dotenv from "dotenv";
 import path from "path";
 
+const runtimeNodeEnv = process.env.NODE_ENV;
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+
+if (runtimeNodeEnv === "test") {
+  dotenv.config({
+    path: path.resolve(process.cwd(), ".env.test"),
+    override: true,
+  });
+}
 
 export interface Env {
   PORT: number;
@@ -50,17 +58,31 @@ function getPositiveNumberEnv(name: string, fallback: string): number {
 
 const configuredPort = Number(getEnv("PORT", "4000"));
 const appBaseUrl = getEnv("APP_BASE_URL", `http://localhost:${configuredPort}`);
+const isTestEnvironment = runtimeNodeEnv === "test";
+const configuredDatabaseName = getOptionalEnv("DB_NAME");
+const testDatabaseName =
+  getOptionalEnv("TEST_DB_NAME") ??
+  (configuredDatabaseName
+    ? configuredDatabaseName.toLowerCase().includes("test")
+      ? configuredDatabaseName
+      : `${configuredDatabaseName}_test`
+    : "roshan_blog_test");
 
 const env: Env = {
   PORT: configuredPort,
   NODE_ENV: getEnv("NODE_ENV", "development") as Env["NODE_ENV"],
-  DB_HOST: getEnv("DB_HOST"),
+  DB_HOST: getEnv("DB_HOST", isTestEnvironment ? "localhost" : undefined),
   DB_PORT: Number(getEnv("DB_PORT", "5432")),
-  DB_NAME: getEnv("DB_NAME"),
-  DB_USER: getEnv("DB_USER"),
-  DB_PASSWORD: getEnv("DB_PASSWORD"),
-  JWT_SECRET: getEnv("JWT_SECRET"),
-  JWT_REFRESH_SECRET: getEnv("JWT_REFRESH_SECRET"),
+  DB_NAME: isTestEnvironment
+    ? testDatabaseName
+    : getEnv("DB_NAME"),
+  DB_USER: getEnv("DB_USER", isTestEnvironment ? getEnv("USER", "postgres") : undefined),
+  DB_PASSWORD: getEnv("DB_PASSWORD", isTestEnvironment ? "" : undefined),
+  JWT_SECRET: getEnv("JWT_SECRET", isTestEnvironment ? "test_jwt_secret" : undefined),
+  JWT_REFRESH_SECRET: getEnv(
+    "JWT_REFRESH_SECRET",
+    isTestEnvironment ? "test_jwt_refresh_secret" : undefined,
+  ),
   MEDIA_BASE_URL: getEnv("MEDIA_BASE_URL", `http://localhost:${configuredPort}`),
   APP_BASE_URL: appBaseUrl,
   API_BASE_URL: getEnv("API_BASE_URL", appBaseUrl),
