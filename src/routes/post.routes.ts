@@ -40,12 +40,6 @@ router.patch<IdRequestParams, unknown, UpdatePostRequest>(
   validateUpdatePost,
   controller.updatePost,
 );
-router.put<IdRequestParams, unknown, UpdatePostRequest>(
-  "/:id",
-  authMiddleware,
-  validateUpdatePost,
-  controller.updatePost,
-);
 router.delete<IdRequestParams, unknown, EmptyRequestBody>(
   "/:id",
   authMiddleware,

@@ -32,12 +32,6 @@ router.patch<IdRequestParams, unknown, UpdateTagDto>(
   validateUpdateTag,
   TagController.updateTag,
 );
-router.put<IdRequestParams, unknown, UpdateTagDto>(
-  "/:id",
-  authMiddleware,
-  validateUpdateTag,
-  TagController.updateTag,
-);
 router.delete<IdRequestParams, unknown, EmptyRequestBody>(
   "/:id",
   authMiddleware,

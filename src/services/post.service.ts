@@ -29,22 +29,11 @@ import postRepository, {
   PostListFilters,
   PostRepository,
 } from "@repositories/post.repository";
+import { slugify } from "@utils/index";
 
 const WORDS_PER_MINUTE = 200;
-const DEFAULT_SLUG = "post";
 const MAX_META_TITLE_LENGTH = 60;
 const MAX_META_DESCRIPTION_LENGTH = 160;
-
-function slugify(input: string): string {
-  const slug = input
-    .toString()
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return slug || DEFAULT_SLUG;
-}
 
 function normalizeRequiredString(value: string, field: string): string {
   const normalized = value.trim();

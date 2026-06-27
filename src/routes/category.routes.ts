@@ -30,12 +30,6 @@ router.patch<IdRequestParams, unknown, UpdateCategoryDto>(
   validateUpdateCategory,
   CategoryController.updateCategory,
 );
-router.put<IdRequestParams, unknown, UpdateCategoryDto>(
-  "/:id",
-  authMiddleware,
-  validateUpdateCategory,
-  CategoryController.updateCategory,
-);
 router.delete<IdRequestParams, unknown, EmptyRequestBody>(
   "/:id",
   authMiddleware,

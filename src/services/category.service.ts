@@ -1,25 +1,17 @@
-import { Op } from "sequelize";
+import { Op, Transaction } from "sequelize";
 import { sequelize, Category } from "@models/index";
 import { CreateCategoryDto } from "@dto/create-category.dto";
 import { UpdateCategoryDto } from "@dto/update-category.dto";
 import { ConflictError, NotFoundError } from "@errors/http-error";
-
-function slugify(input: string): string {
-  return input
-    .toString()
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+import { slugify } from "@utils/index";
 
 class CategoryService {
-  async generateUniqueSlug(name: string): Promise<string> {
+  private async generateUniqueSlug(name: string, transaction: Transaction): Promise<string> {
     const base = slugify(name);
     let slug = base;
     let idx = 1;
     // eslint-disable-next-line no-await-in-loop
-    while (await Category.findOne({ where: { slug } })) {
+    while (await Category.findOne({ where: { slug }, transaction })) {
       slug = `${base}-${idx}`;
       idx += 1;
     }
@@ -30,7 +22,7 @@ class CategoryService {
     return sequelize.transaction(async (t) => {
       const slug = dto.slug
         ? slugify(dto.slug)
-        : await this.generateUniqueSlug(dto.name);
+        : await this.generateUniqueSlug(dto.name, t);
       const existing = await Category.findOne({
         where: { slug },
         transaction: t,

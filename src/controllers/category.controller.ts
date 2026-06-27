@@ -15,7 +15,7 @@ export async function createCategory(
 ) {
   try {
     const category = await CategoryService.create(req.body);
-    return res.status(201).json({ data: category });
+    return res.status(201).json({ success: true, data: category });
   } catch (err: unknown) {
     return next(err);
   }
@@ -28,7 +28,7 @@ export async function updateCategory(
 ) {
   try {
     const category = await CategoryService.update(req.params.id, req.body);
-    return res.json({ data: category });
+    return res.json({ success: true, data: category });
   } catch (err: unknown) {
     return next(err);
   }
@@ -54,7 +54,7 @@ export async function listCategories(
 ) {
   try {
     const categories = await CategoryService.getAll();
-    return res.json({ data: categories });
+    return res.json({ success: true, data: categories });
   } catch (err: unknown) {
     return next(err);
   }

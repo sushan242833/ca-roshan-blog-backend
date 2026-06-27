@@ -1,25 +1,17 @@
-import { Op } from "sequelize";
+import { Op, Transaction } from "sequelize";
 import { sequelize, Tag } from "@models/index";
 import { CreateTagDto } from "@dto/create-tag.dto";
 import { UpdateTagDto } from "@dto/update-tag.dto";
 import { ConflictError, NotFoundError } from "@errors/http-error";
-
-function slugify(input: string): string {
-  return input
-    .toString()
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+import { slugify } from "@utils/index";
 
 class TagService {
-  async generateUniqueSlug(name: string): Promise<string> {
+  private async generateUniqueSlug(name: string, transaction: Transaction): Promise<string> {
     const base = slugify(name);
     let slug = base;
     let idx = 1;
     // eslint-disable-next-line no-await-in-loop
-    while (await Tag.findOne({ where: { slug } })) {
+    while (await Tag.findOne({ where: { slug }, transaction })) {
       slug = `${base}-${idx}`;
       idx += 1;
     }
@@ -30,7 +22,7 @@ class TagService {
     return sequelize.transaction(async (t) => {
       const slug = dto.slug
         ? slugify(dto.slug)
-        : await this.generateUniqueSlug(dto.name);
+        : await this.generateUniqueSlug(dto.name, t);
       const existing = await Tag.findOne({ where: { slug }, transaction: t });
       if (existing) throw new ConflictError("Tag slug already exists.");
       const tag = await Tag.create(
