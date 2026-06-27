@@ -110,7 +110,7 @@ class MediaController {
   ) {
     try {
       await mediaService.deleteById(req.params.id);
-      return sendSuccess(res, 200, "Media deleted successfully.", null);
+      return res.status(204).send();
     } catch (error: unknown) {
       return next(error);
     }

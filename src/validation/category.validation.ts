@@ -17,6 +17,8 @@ export function validateCreateCategory(
   if (!name || typeof name !== "string") errors.push("name is required");
   if (errors.length)
     return next(new BadRequestError("name is required."));
+  if (typeof name === "string" && name.length > 100)
+    return next(new BadRequestError("name must be 100 characters or fewer."));
   return next();
 }
 
@@ -31,6 +33,8 @@ export function validateUpdateCategory(
 
   if (name && typeof name !== "string")
     return next(new BadRequestError("Invalid name."));
+  if (typeof name === "string" && name.length > 100)
+    return next(new BadRequestError("name must be 100 characters or fewer."));
   if (slug && typeof slug !== "string")
     return next(new BadRequestError("Invalid slug."));
   return next();
