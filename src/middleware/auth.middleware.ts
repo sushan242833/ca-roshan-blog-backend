@@ -25,9 +25,9 @@ export const authMiddleware = async (
     const token = parts[1];
     const payload = verifyAccessToken(token);
     const admin = await Admin.findByPk(payload.sub, {
-      attributes: ["id", "email"],
+      attributes: ["id", "email", "isActive"],
     });
-    if (!admin)
+    if (!admin || !admin.isActive)
       return res.status(401).json({ success: false, message: "Invalid token" });
     const authenticatedAdmin: AuthenticatedAdmin = {
       id: admin.id,

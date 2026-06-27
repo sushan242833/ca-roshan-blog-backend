@@ -2,6 +2,7 @@ import { Op } from "sequelize";
 import { sequelize, Tag } from "@models/index";
 import { CreateTagDto } from "@dto/create-tag.dto";
 import { UpdateTagDto } from "@dto/update-tag.dto";
+import { ConflictError, NotFoundError } from "@errors/http-error";
 
 function slugify(input: string): string {
   return input
@@ -31,7 +32,7 @@ class TagService {
         ? slugify(dto.slug)
         : await this.generateUniqueSlug(dto.name);
       const existing = await Tag.findOne({ where: { slug }, transaction: t });
-      if (existing) throw { status: 409, message: "Tag slug already exists" };
+      if (existing) throw new ConflictError("Tag slug already exists.");
       const tag = await Tag.create(
         { name: dto.name, slug },
         { transaction: t },
@@ -43,7 +44,7 @@ class TagService {
   async update(id: string, dto: UpdateTagDto): Promise<Tag> {
     return sequelize.transaction(async (t) => {
       const tag = await Tag.findByPk(id, { transaction: t });
-      if (!tag) throw { status: 404, message: "Tag not found" };
+      if (!tag) throw new NotFoundError("Tag not found.");
       if (dto.name) tag.name = dto.name;
       if (dto.slug) {
         const newSlug = slugify(dto.slug);
@@ -51,7 +52,7 @@ class TagService {
           where: { slug: newSlug, id: { [Op.ne]: id } },
           transaction: t,
         });
-        if (existing) throw { status: 409, message: "Tag slug already exists" };
+        if (existing) throw new ConflictError("Tag slug already exists.");
         tag.slug = newSlug;
       }
       await tag.save({ transaction: t });
@@ -62,7 +63,7 @@ class TagService {
   async delete(id: string): Promise<boolean> {
     return sequelize.transaction(async (t) => {
       const tag = await Tag.findByPk(id, { transaction: t });
-      if (!tag) throw { status: 404, message: "Tag not found" };
+      if (!tag) throw new NotFoundError("Tag not found.");
       await tag.destroy({ transaction: t });
       return true;
     });

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { EmptyRequestParams } from "@app-types/http.requests";
+import { BadRequestError } from "@errors/http-error";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -19,7 +20,7 @@ export function validateLogin(
   if (!password || typeof password !== "string")
     errors.push("password is required");
   if (errors.length) {
-    return next({ status: 400, message: "Validation failed", details: errors });
+    return next(new BadRequestError("email and password are required."));
   }
   return next();
 }

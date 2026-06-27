@@ -2,6 +2,7 @@ import { Op } from "sequelize";
 import { sequelize, Category } from "@models/index";
 import { CreateCategoryDto } from "@dto/create-category.dto";
 import { UpdateCategoryDto } from "@dto/update-category.dto";
+import { ConflictError, NotFoundError } from "@errors/http-error";
 
 function slugify(input: string): string {
   return input
@@ -35,7 +36,7 @@ class CategoryService {
         transaction: t,
       });
       if (existing)
-        throw { status: 409, message: "Category slug already exists" };
+        throw new ConflictError("Category slug already exists.");
       const category = await Category.create(
         { name: dto.name, slug },
         { transaction: t },
@@ -47,7 +48,7 @@ class CategoryService {
   async update(id: string, dto: UpdateCategoryDto): Promise<Category> {
     return sequelize.transaction(async (t) => {
       const category = await Category.findByPk(id, { transaction: t });
-      if (!category) throw { status: 404, message: "Category not found" };
+      if (!category) throw new NotFoundError("Category not found.");
       if (dto.name) category.name = dto.name;
       if (dto.slug) {
         const newSlug = slugify(dto.slug);
@@ -56,7 +57,7 @@ class CategoryService {
           transaction: t,
         });
         if (existing)
-          throw { status: 409, message: "Category slug already exists" };
+          throw new ConflictError("Category slug already exists.");
         category.slug = newSlug;
       }
       await category.save({ transaction: t });
@@ -67,7 +68,7 @@ class CategoryService {
   async delete(id: string): Promise<boolean> {
     return sequelize.transaction(async (t) => {
       const category = await Category.findByPk(id, { transaction: t });
-      if (!category) throw { status: 404, message: "Category not found" };
+      if (!category) throw new NotFoundError("Category not found.");
       await category.destroy({ transaction: t });
       return true;
     });
@@ -80,7 +81,7 @@ class CategoryService {
 
   async getBySlug(slug: string): Promise<Category> {
     const category = await Category.findOne({ where: { slug } });
-    if (!category) throw { status: 404, message: "Category not found" };
+    if (!category) throw new NotFoundError("Category not found.");
     return category;
   }
 }

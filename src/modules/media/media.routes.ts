@@ -16,11 +16,12 @@ router.post<EmptyRequestParams, unknown, EmptyRequestBody>(
   mediaUploadMiddleware,
   (req, res, next) => mediaController.upload(req, res, next),
 );
-router.get<EmptyRequestParams, unknown, EmptyRequestBody>("/", (req, res, next) =>
+router.get<EmptyRequestParams, unknown, EmptyRequestBody>("/", authMiddleware, (req, res, next) =>
   mediaController.listAll(req, res, next),
 );
 router.get<IdRequestParams, unknown, EmptyRequestBody>(
   "/:id",
+  authMiddleware,
   (req, res, next) => mediaController.getById(req, res, next),
 );
 

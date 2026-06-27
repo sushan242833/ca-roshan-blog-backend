@@ -18,6 +18,8 @@ export interface AdminAttributes {
   id: string;
   email: string;
   passwordHash: string;
+  name: string;
+  isActive: boolean;
   refreshTokenHash?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
@@ -25,7 +27,7 @@ export interface AdminAttributes {
 
 export type AdminCreationAttributes = Optional<
   AdminAttributes,
-  "id" | "createdAt" | "updatedAt"
+  "id" | "isActive" | "createdAt" | "updatedAt"
 >;
 
 @Table({ tableName: "admins", timestamps: true, underscored: true })
@@ -39,6 +41,15 @@ export class Admin extends Model<AdminAttributes, AdminCreationAttributes> {
   @AllowNull(false)
   @Column({ type: DataType.STRING })
   email!: string;
+
+  @AllowNull(false)
+  @Column({ type: DataType.STRING(255) })
+  name!: string;
+
+  @AllowNull(false)
+  @Default(true)
+  @Column({ field: "is_active", type: DataType.BOOLEAN })
+  isActive!: boolean;
 
   @AllowNull(false)
   @Column({ field: "password_hash", type: DataType.STRING })

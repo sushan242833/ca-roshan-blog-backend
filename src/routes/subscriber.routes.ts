@@ -27,10 +27,5 @@ router.post<VerifySubscriberRequest, unknown, EmptyRequestBody>(
   validateSubscriberToken,
   controller.unsubscribeSubscriber,
 );
-router.get<VerifySubscriberRequest, unknown, EmptyRequestBody>(
-  "/unsubscribe/:token",
-  validateSubscriberToken,
-  controller.unsubscribeSubscriber,
-);
 
 export default router;

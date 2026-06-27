@@ -24,7 +24,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use(helmet());
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
 app.use(cookieParser());
 
 const uploadsDirectory = path.resolve(process.cwd(), "uploads");
@@ -33,6 +33,9 @@ app.use(
   express.static(uploadsDirectory, {
     index: false,
     dotfiles: "deny",
+    setHeaders: (res) => {
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    },
   }),
 );
 
