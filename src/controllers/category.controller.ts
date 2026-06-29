@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { CreateCategoryDto } from "@dto/create-category.dto";
 import { UpdateCategoryDto } from "@dto/update-category.dto";
-import CategoryService from "@services/category.service";
+import CategoryService, { CategoryWithCount } from "@services/category.service";
 import {
   EmptyRequestBody,
   EmptyRequestParams,

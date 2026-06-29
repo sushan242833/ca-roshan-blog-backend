@@ -1,6 +1,6 @@
 import { Router } from "express";
 import * as controller from "@controllers/auth.controller";
-import { validateLogin } from "@validation/auth.validation";
+import { validateLogin, validateUpdateProfile } from "@validation/auth.validation";
 import { authMiddleware } from "@middleware/auth.middleware";
 import {
   EmptyRequestBody,
@@ -27,6 +27,12 @@ router.get<EmptyRequestParams, unknown, EmptyRequestBody>(
   "/me",
   authMiddleware,
   controller.me,
+);
+router.patch<EmptyRequestParams, unknown, unknown>(
+  "/profile",
+  authMiddleware,
+  validateUpdateProfile,
+  controller.updateProfile,
 );
 
 export default router;

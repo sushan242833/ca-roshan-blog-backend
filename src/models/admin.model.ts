@@ -20,6 +20,9 @@ export interface AdminAttributes {
   passwordHash: string;
   name: string;
   isActive: boolean;
+  title?: string | null;
+  bio?: string | null;
+  avatarUrl?: string | null;
   refreshTokenHash?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
@@ -27,7 +30,7 @@ export interface AdminAttributes {
 
 export type AdminCreationAttributes = Optional<
   AdminAttributes,
-  "id" | "isActive" | "createdAt" | "updatedAt"
+  "id" | "isActive" | "title" | "bio" | "avatarUrl" | "createdAt" | "updatedAt"
 >;
 
 @Table({ tableName: "admins", timestamps: true, underscored: true })
@@ -50,6 +53,18 @@ export class Admin extends Model<AdminAttributes, AdminCreationAttributes> {
   @Default(true)
   @Column({ field: "is_active", type: DataType.BOOLEAN })
   isActive!: boolean;
+
+  @AllowNull(true)
+  @Column({ type: DataType.STRING(150) })
+  title?: string | null;
+
+  @AllowNull(true)
+  @Column({ type: DataType.TEXT })
+  bio?: string | null;
+
+  @AllowNull(true)
+  @Column({ field: "avatar_url", type: DataType.STRING(500) })
+  avatarUrl?: string | null;
 
   @AllowNull(false)
   @Column({ field: "password_hash", type: DataType.STRING })

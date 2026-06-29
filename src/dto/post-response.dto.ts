@@ -1,3 +1,4 @@
+import Admin from "@models/admin.model";
 import { Category } from "@models/category.model";
 import { Post, PostStatus } from "@models/post.model";
 import { Tag } from "@models/tag.model";
@@ -14,6 +15,13 @@ export interface TaxonomyResponse {
   slug: string;
 }
 
+export interface AuthorResponse {
+  name: string;
+  title: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
+}
+
 export interface PostSummaryResponse {
   id: string;
   title: string;
@@ -28,8 +36,10 @@ export interface PostSummaryResponse {
   publishedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  author: AuthorResponse | null;
   featuredImage: FeaturedImageResponse | null;
   categories: TaxonomyResponse[];
+  category: TaxonomyResponse | null;
   tags: TaxonomyResponse[];
 }
 
@@ -42,6 +52,18 @@ function toTaxonomyResponse(item: Category | Tag): TaxonomyResponse {
     id: item.id,
     name: item.name,
     slug: item.slug,
+  };
+}
+
+function toAuthorResponse(post: Post): AuthorResponse | null {
+  if (!post.author) {
+    return null;
+  }
+  return {
+    name: post.author.name,
+    title: post.author.title ?? null,
+    bio: post.author.bio ?? null,
+    avatarUrl: post.author.avatarUrl ?? null,
   };
 }
 
@@ -72,8 +94,10 @@ export function toPostSummaryResponse(post: Post): PostSummaryResponse {
     publishedAt: post.publishedAt ?? null,
     createdAt: post.createdAt,
     updatedAt: post.updatedAt,
+    author: toAuthorResponse(post),
     featuredImage: toFeaturedImageResponse(post),
     categories: post.categories?.map(toTaxonomyResponse) ?? [],
+    category: post.category ? toTaxonomyResponse(post.category) : null,
     tags: post.tags?.map(toTaxonomyResponse) ?? [],
   };
 }

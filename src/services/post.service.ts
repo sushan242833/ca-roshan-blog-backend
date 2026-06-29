@@ -9,8 +9,6 @@ import {
 } from "@dto/post-response.dto";
 import { UpdatePostDto } from "@dto/update-post.dto";
 import {
-  BadRequestError,
-  ConflictError,
   InternalServerError,
   NotFoundError,
   ValidationError,
@@ -168,6 +166,7 @@ export class PostService {
 
       validateSeo(metaTitle, metaDescription);
       await this.assertFeaturedImageExists(dto.featuredImageId, transaction);
+      await this.assertCategoryExists(dto.categoryId, transaction);
       await this.assertTaxonomyIdsExist(categoryIds, tagIds, transaction);
 
       const slug = await this.generateUniqueSlug(
@@ -181,6 +180,7 @@ export class PostService {
         excerpt,
         content,
         featuredImageId: dto.featuredImageId ?? null,
+        categoryId: dto.categoryId ?? null,
         metaTitle,
         metaDescription,
         status,
@@ -248,6 +248,11 @@ export class PostService {
       if (typeof dto.featuredImageId !== "undefined") {
         await this.assertFeaturedImageExists(dto.featuredImageId, transaction);
         post.featuredImageId = dto.featuredImageId;
+      }
+
+      if (typeof dto.categoryId !== "undefined") {
+        await this.assertCategoryExists(dto.categoryId, transaction);
+        post.categoryId = dto.categoryId;
       }
 
       if (typeof dto.featured === "boolean") {
@@ -365,12 +370,12 @@ export class PostService {
 
   async getBySlug(slug: string): Promise<PostDetailResponse> {
     const post = await this.repository.findPublishedBySlug(slug);
-    if (!post) {
-      throw new NotFoundError("Post not found.");
-    }
+    if (!post) throw new NotFoundError("Post not found.");
 
-    await this.repository.incrementViewCount(post.id);
-    post.viewCount += 1;
+    // Fire-and-forget: increment view count without blocking the response.
+    // Errors are silently ignored so a count failure never breaks page load.
+    this.repository.incrementViewCount(post.id).catch(() => {});
+
     return toPostDetailResponse(post);
   }
 
@@ -444,6 +449,24 @@ export class PostService {
           field: "featuredImageId",
           message: "Featured image does not exist.",
         },
+      ]);
+    }
+  }
+
+  private async assertCategoryExists(
+    categoryId: string | null | undefined,
+    transaction: Transaction,
+  ): Promise<void> {
+    if (typeof categoryId === "undefined" || categoryId === null) {
+      return;
+    }
+    const exists = await this.repository.categoryIdsExist(
+      [categoryId],
+      transaction,
+    );
+    if (!exists) {
+      throw new ValidationError([
+        { field: "categoryId", message: "Category does not exist." },
       ]);
     }
   }

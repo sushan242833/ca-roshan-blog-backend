@@ -44,6 +44,7 @@ export interface PostAttributes {
   readingTime: number;
   viewCount: number;
   adminId: string;
+  categoryId?: string | null;
   publishedAt?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
@@ -61,6 +62,7 @@ export type PostCreationAttributes = Optional<
   | "featured"
   | "readingTime"
   | "viewCount"
+  | "categoryId"
   | "publishedAt"
   | "createdAt"
   | "updatedAt"
@@ -139,6 +141,14 @@ export class Post extends Model<PostAttributes, PostCreationAttributes> {
   @AllowNull(false)
   @Column({ type: DataType.UUID, field: "admin_id" })
   adminId!: string;
+
+  @ForeignKey(() => Category)
+  @AllowNull(true)
+  @Column({ type: DataType.UUID, field: "category_id" })
+  categoryId?: string | null;
+
+  @BelongsTo(() => Category)
+  category?: Category | null;
 
   @AllowNull(true)
   @Column({ type: DataType.DATE, field: "published_at" })

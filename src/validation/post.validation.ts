@@ -150,6 +150,7 @@ function validatePostBody(
     "metaDescription",
   ].forEach((field) => validateOptionalString(body, field, errors));
   validateOptionalUuid(body, "featuredImageId", errors);
+  validateOptionalUuid(body, "categoryId", errors);
   validateOptionalUuidArray(body, "categoryIds", errors);
   validateOptionalUuidArray(body, "tagIds", errors);
   validateOptionalBoolean(body, "featured", errors);

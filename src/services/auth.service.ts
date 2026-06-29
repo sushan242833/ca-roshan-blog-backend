@@ -5,6 +5,7 @@ import {
   verifyRefreshToken,
 } from "@utils/jwt";
 import { hashValue, compareHash } from "@utils/bcrypt";
+import { NotFoundError } from "@errors/http-error";
 
 interface Tokens {
   accessToken: string;
@@ -14,6 +15,9 @@ interface Tokens {
 interface AuthenticatedAdminResponse {
   id: string;
   email: string;
+  title: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
 }
 
 interface LoginResponse {
@@ -43,6 +47,9 @@ export class AuthService {
     const safeAdmin: AuthenticatedAdminResponse = {
       id: admin.id,
       email: admin.email,
+      title: admin.title ?? null,
+      bio: admin.bio ?? null,
+      avatarUrl: admin.avatarUrl ?? null,
     };
     return { admin: safeAdmin, tokens: { accessToken, refreshToken } };
   }
@@ -74,11 +81,41 @@ export class AuthService {
     }
   }
 
-  public async getMe(adminId: string): Promise<Admin | null> {
+  public async getMe(adminId: string): Promise<AuthenticatedAdminResponse | null> {
     const admin = await Admin.findByPk(adminId, {
-      attributes: ["id", "email", "createdAt", "updatedAt"],
+      attributes: ["id", "email", "title", "bio", "avatarUrl", "createdAt", "updatedAt"],
     });
-    return admin;
+    if (!admin) return null;
+    return {
+      id: admin.id,
+      email: admin.email,
+      title: admin.title ?? null,
+      bio: admin.bio ?? null,
+      avatarUrl: admin.avatarUrl ?? null,
+    };
+  }
+
+  public async updateProfile(
+    adminId: string,
+    data: { title?: string | null; bio?: string | null; avatarUrl?: string | null },
+  ): Promise<{ id: string; email: string; name: string; title: string | null; bio: string | null; avatarUrl: string | null }> {
+    const admin = await Admin.findByPk(adminId);
+    if (!admin) throw new NotFoundError("Admin not found.");
+
+    if (typeof data.title !== "undefined") admin.title = data.title;
+    if (typeof data.bio !== "undefined") admin.bio = data.bio;
+    if (typeof data.avatarUrl !== "undefined") admin.avatarUrl = data.avatarUrl;
+
+    await admin.save();
+
+    return {
+      id: admin.id,
+      email: admin.email,
+      name: admin.name,
+      title: admin.title ?? null,
+      bio: admin.bio ?? null,
+      avatarUrl: admin.avatarUrl ?? null,
+    };
   }
 }
 

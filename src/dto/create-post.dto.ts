@@ -6,6 +6,7 @@ export interface CreatePostDto {
   slug?: string;
   excerpt?: string | null;
   featuredImageId?: string | null;
+  categoryId?: string | null;
   metaTitle?: string | null;
   metaDescription?: string | null;
   status?: PostStatus;

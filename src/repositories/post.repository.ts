@@ -7,6 +7,7 @@ import {
   WhereOptions,
 } from "sequelize";
 import {
+  Admin,
   Category,
   Media,
   Post,
@@ -48,7 +49,9 @@ export interface FindPostOptions {
   withAssociations?: boolean;
 }
 
-function postAssociations(filters?: Pick<PostListFilters, "category" | "tag">): Includeable[] {
+function postAssociations(
+  filters?: Pick<PostListFilters, "category" | "tag">,
+): Includeable[] {
   return [
     {
       model: Media,
@@ -57,7 +60,20 @@ function postAssociations(filters?: Pick<PostListFilters, "category" | "tag">): 
       required: false,
     },
     {
+      model: Admin,
+      as: "author",
+      attributes: ["id", "name", "title", "bio", "avatarUrl"],
+      required: false,
+    },
+    {
       model: Category,
+      as: "category",
+      attributes: ["id", "name", "slug"],
+      required: false,
+    },
+    {
+      model: Category,
+      as: "categories",
       attributes: ["id", "name", "slug"],
       through: { attributes: [] },
       required: Boolean(filters?.category),

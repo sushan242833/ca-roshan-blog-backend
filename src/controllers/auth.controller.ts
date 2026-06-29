@@ -110,4 +110,32 @@ export async function me(
   }
 }
 
-export default { login, logout, refresh, me };
+export async function updateProfile(
+  req: Request<EmptyRequestParams, unknown, unknown>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const admin = req.user;
+    if (!admin)
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+
+    const { title, bio, avatarUrl } = req.body as {
+      title?: string | null;
+      bio?: string | null;
+      avatarUrl?: string | null;
+    };
+
+    const updated = await authService.updateProfile(admin.id, {
+      title,
+      bio,
+      avatarUrl,
+    });
+
+    return res.json({ success: true, data: updated });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export default { login, logout, refresh, me, updateProfile };
