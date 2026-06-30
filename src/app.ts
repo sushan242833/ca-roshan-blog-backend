@@ -14,6 +14,7 @@ import categoryRoutes from "@routes/category.routes";
 import subscriberRoutes from "@routes/subscriber.routes";
 import adminSubscriberRoutes from "@routes/admin-subscriber.routes";
 import mediaRoutes from "@modules/media/media.routes";
+import contactRoutes from "@routes/contact.routes";
 import errorMiddleware from "@middleware/error.middleware";
 import { EmptyRequestBody, EmptyRequestParams } from "@app-types/http.requests";
 import { setupSwagger } from "@config/swagger";
@@ -65,6 +66,7 @@ app.use("/api/v1/admin/subscribers", adminSubscriberRoutes);
 app.use("/api/v1/categories", categoryRoutes);
 app.use("/api/v1/tags", tagRoutes);
 app.use("/api/v1/media", mediaRoutes);
+app.use("/api/v1/contact", contactRoutes);
 
 setupSwagger(app);
 app.use(errorMiddleware);

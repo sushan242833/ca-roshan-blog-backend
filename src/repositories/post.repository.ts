@@ -35,6 +35,7 @@ export interface AdminPostListFilters {
   page: number;
   limit: number;
   search?: string;
+  status?: PostStatus;
   includeDeleted: boolean;
 }
 
@@ -201,6 +202,10 @@ export class PostRepository {
 
     if (searchWhere) {
       conditions.push(searchWhere);
+    }
+
+    if (filters.status) {
+      conditions.push({ status: filters.status });
     }
 
     return Post.findAndCountAll({

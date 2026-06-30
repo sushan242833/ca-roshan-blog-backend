@@ -27,6 +27,7 @@ export interface Env {
   FRONTEND_URL: string;
   RESEND_API_KEY?: string;
   EMAIL_FROM: string;
+  CONTACT_EMAIL: string;
   NEWSLETTER_EMAIL_RATE_LIMIT_PER_SECOND: number;
 }
 
@@ -97,6 +98,7 @@ const env: Env = {
   FRONTEND_URL: getEnv("FRONTEND_URL", "http://localhost:3000"),
   RESEND_API_KEY: getOptionalEnv("RESEND_API_KEY"),
   EMAIL_FROM: getEnv("EMAIL_FROM", "Roshan Blog <onboarding@resend.dev>"),
+  CONTACT_EMAIL: getEnv("CONTACT_EMAIL", "contact@caroshan.com"),
   NEWSLETTER_EMAIL_RATE_LIMIT_PER_SECOND: getPositiveNumberEnv(
     "NEWSLETTER_EMAIL_RATE_LIMIT_PER_SECOND",
     "2",

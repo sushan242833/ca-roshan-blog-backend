@@ -1,4 +1,6 @@
 import { Transaction } from "sequelize";
+import jwt from "jsonwebtoken";
+import { env } from "@config/env";
 import { CreatePostDto } from "@dto/create-post.dto";
 import { PaginatedResponse } from "@dto/pagination.dto";
 import {
@@ -11,11 +13,11 @@ import { UpdatePostDto } from "@dto/update-post.dto";
 import {
   InternalServerError,
   NotFoundError,
+  UnauthorizedError,
   ValidationError,
   ValidationIssue,
 } from "@errors/http-error";
-import type { Post } from "@models/post.model";
-import { PostCreationAttributes, PostStatus } from "@models/post.model";
+import { Post, PostCreationAttributes, PostStatus } from "@models/post.model";
 import mediaRepository, {
   MediaRepository,
 } from "@modules/media/media.repository";
@@ -375,6 +377,65 @@ export class PostService {
     // Fire-and-forget: increment view count without blocking the response.
     // Errors are silently ignored so a count failure never breaks page load.
     this.repository.incrementViewCount(post.id).catch(() => {});
+
+    return toPostDetailResponse(post);
+  }
+
+  async getDashboardStats(): Promise<{
+    totalPosts: number;
+    published: number;
+    drafts: number;
+    archived: number;
+  }> {
+    const [totalPosts, published, drafts, archived] = await Promise.all([
+      Post.count({ paranoid: false }),
+      Post.count({ where: { status: PostStatus.PUBLISHED }, paranoid: false }),
+      Post.count({ where: { status: PostStatus.DRAFT }, paranoid: false }),
+      Post.count({ where: { status: PostStatus.ARCHIVED }, paranoid: false }),
+    ]);
+    return { totalPosts, published, drafts, archived };
+  }
+
+  async generatePreviewToken(postId: string): Promise<{
+    token: string;
+    expiresAt: Date;
+  }> {
+    // Verify the post exists (published or draft, not soft-deleted)
+    const post = await Post.findByPk(postId, { paranoid: true });
+    if (!post) throw new NotFoundError("Post not found.");
+
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 60 minutes
+
+    const token = jwt.sign(
+      { sub: postId, type: "preview" },
+      env.JWT_SECRET,
+      { expiresIn: "1h" },
+    );
+
+    return { token, expiresAt };
+  }
+
+  async getByPreviewToken(token: string): Promise<PostDetailResponse> {
+    let payload: { sub: string; type: string };
+
+    try {
+      payload = jwt.verify(token, env.JWT_SECRET) as {
+        sub: string;
+        type: string;
+      };
+    } catch {
+      throw new UnauthorizedError("Preview link is invalid or has expired.");
+    }
+
+    if (payload.type !== "preview") {
+      throw new UnauthorizedError("Invalid preview token.");
+    }
+
+    // Fetch the post regardless of status (draft or published)
+    const post = await this.repository.findById(payload.sub, {
+      withAssociations: true,
+    });
+    if (!post) throw new NotFoundError("Post not found.");
 
     return toPostDetailResponse(post);
   }

@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import { UnauthorizedError, ValidationError } from "@errors/http-error";
+import { PostStatus } from "@models/post.model";
 import postService from "@services/post.service";
+import newsletterService from "@services/newsletter.service";
 import { AuthenticatedAdmin } from "@app-types/authenticated-admin";
 import {
   CreatePostRequest,
@@ -238,9 +240,63 @@ export async function adminList(
       page: getPositiveIntegerQuery(req, "page", 1),
       limit: getPositiveIntegerQuery(req, "limit", DEFAULT_ADMIN_LIMIT, MAX_LIMIT),
       search: getSearchQuery(req),
+      status: getQueryString(req.query.status) as PostStatus | undefined,
       includeDeleted: getBooleanQuery(req, "includeDeleted") ?? false,
     });
     return res.json({ success: true, data: result });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function getDashboardStats(
+  _req: Request<EmptyRequestParams, unknown, EmptyRequestBody>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const [postStats, subscriberStats] = await Promise.all([
+      postService.getDashboardStats(),
+      newsletterService.stats(),
+    ]);
+    return res.json({
+      success: true,
+      data: {
+        totalPosts: postStats.totalPosts,
+        published: postStats.published,
+        drafts: postStats.drafts,
+        archived: postStats.archived,
+        totalSubscribers: subscriberStats.total,
+        activeSubscribers: subscriberStats.active,
+        pendingSubscribers: subscriberStats.pending,
+      },
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function generatePreviewToken(
+  req: Request<IdRequestParams, unknown, EmptyRequestBody>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const result = await postService.generatePreviewToken(req.params.id);
+    return res.json({ success: true, data: result });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function getByPreviewToken(
+  req: Request<{ token: string }, unknown, EmptyRequestBody>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const post = await postService.getByPreviewToken(req.params.token);
+    return res.json({ success: true, data: post });
   } catch (err) {
     return next(err);
   }
@@ -258,4 +314,7 @@ export default {
   listFeatured,
   getBySlug,
   adminList,
+  getDashboardStats,
+  generatePreviewToken,
+  getByPreviewToken,
 };

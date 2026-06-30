@@ -28,6 +28,11 @@ router.get<EmptyRequestParams, unknown, EmptyRequestBody>(
   authMiddleware,
   controller.adminList,
 );
+router.get<EmptyRequestParams, unknown, EmptyRequestBody>(
+  "/admin/stats",
+  authMiddleware,
+  controller.getDashboardStats,
+);
 router.post<EmptyRequestParams, unknown, CreatePostRequest>(
   "/",
   authMiddleware,
@@ -64,6 +69,15 @@ router.post<IdRequestParams, unknown, EmptyRequestBody>(
   "/:id/unpublish",
   authMiddleware,
   controller.unpublishPost,
+);
+router.post<IdRequestParams, unknown, EmptyRequestBody>(
+  "/:id/preview-token",
+  authMiddleware,
+  controller.generatePreviewToken,
+);
+router.get<{ token: string }, unknown, EmptyRequestBody>(
+  "/preview/:token",
+  controller.getByPreviewToken,
 );
 router.get<SlugRequestParams, unknown, EmptyRequestBody>(
   "/:slug",

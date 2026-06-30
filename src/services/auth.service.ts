@@ -14,6 +14,7 @@ interface Tokens {
 
 interface AuthenticatedAdminResponse {
   id: string;
+  name: string;
   email: string;
   title: string | null;
   bio: string | null;
@@ -46,6 +47,7 @@ export class AuthService {
 
     const safeAdmin: AuthenticatedAdminResponse = {
       id: admin.id,
+      name: admin.name,
       email: admin.email,
       title: admin.title ?? null,
       bio: admin.bio ?? null,
@@ -83,11 +85,12 @@ export class AuthService {
 
   public async getMe(adminId: string): Promise<AuthenticatedAdminResponse | null> {
     const admin = await Admin.findByPk(adminId, {
-      attributes: ["id", "email", "title", "bio", "avatarUrl", "createdAt", "updatedAt"],
+      attributes: ["id", "name", "email", "title", "bio", "avatarUrl", "createdAt", "updatedAt"],
     });
     if (!admin) return null;
     return {
       id: admin.id,
+      name: admin.name,
       email: admin.email,
       title: admin.title ?? null,
       bio: admin.bio ?? null,
