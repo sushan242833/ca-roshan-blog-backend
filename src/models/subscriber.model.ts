@@ -26,6 +26,7 @@ export interface SubscriberAttributes {
   email: string;
   status: SubscriberStatus;
   verificationToken?: string | null;
+  verificationTokenExpiresAt?: Date | null;
   unsubscribeToken: string;
   verifiedAt?: Date | null;
   createdAt?: Date;
@@ -38,6 +39,7 @@ export type SubscriberCreationAttributes = Optional<
   | "id"
   | "status"
   | "verificationToken"
+  | "verificationTokenExpiresAt"
   | "verifiedAt"
   | "createdAt"
   | "updatedAt"
@@ -79,6 +81,10 @@ export class Subscriber extends Model<
   @Unique
   @Column({ type: DataType.STRING(255), field: "verification_token" })
   verificationToken?: string | null;
+
+  @AllowNull(true)
+  @Column({ type: DataType.DATE, field: "verification_token_expires_at" })
+  verificationTokenExpiresAt?: Date | null;
 
   @AllowNull(false)
   @Unique

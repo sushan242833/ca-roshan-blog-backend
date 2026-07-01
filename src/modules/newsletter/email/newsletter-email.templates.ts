@@ -78,6 +78,7 @@ export function buildVerificationEmail(
       </p>
       <p style="font-size:16px;line-height:1.7;margin:16px 0 0;color:#374151;">
         Confirm that you want to receive new post updates by clicking the button below.
+        This link expires in <strong>24 hours</strong>.
       </p>
       ${button("Verify Subscription", data.verificationUrl)}
       <p style="font-size:16px;line-height:1.7;margin:0 0 16px;color:#374151;">
@@ -100,7 +101,7 @@ export function buildVerificationEmail(
       "",
       "A subscription request was received for this email address on Roshan Blog.",
       "",
-      "Confirm that you want to receive new post updates by clicking the link below.",
+      "Confirm that you want to receive new post updates by clicking the link below. This link expires in 24 hours.",
       "",
       `Verify Subscription: ${data.verificationUrl}`,
       "",

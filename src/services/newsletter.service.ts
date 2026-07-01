@@ -11,6 +11,7 @@ import {
 import { PaginatedResponse } from "@dto/pagination.dto";
 import {
   ConflictError,
+  GoneError,
   NotFoundError,
   ValidationError,
 } from "@errors/http-error";
@@ -40,6 +41,7 @@ import subscriberRepository, {
 } from "@repositories/subscriber.repository";
 
 const TOKEN_BYTES = 32;
+const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const ACTIVE_SUBSCRIBER_BATCH_SIZE = 500;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -115,6 +117,7 @@ export class NewsletterService implements NewsletterJobWorker {
           includeDeleted: true,
         });
         const verificationToken = createToken();
+        const verificationTokenExpiresAt = new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS);
         const unsubscribeToken = existing?.unsubscribeToken ?? createToken();
 
         if (
@@ -138,6 +141,7 @@ export class NewsletterService implements NewsletterJobWorker {
                 email,
                 status: SubscriberStatus.PENDING,
                 verificationToken,
+                verificationTokenExpiresAt,
                 unsubscribeToken,
               },
               transaction,
@@ -170,9 +174,19 @@ export class NewsletterService implements NewsletterJobWorker {
       throw new NotFoundError("Verification token not found.");
     }
 
+    if (
+      subscriber.verificationTokenExpiresAt &&
+      subscriber.verificationTokenExpiresAt < new Date()
+    ) {
+      throw new GoneError(
+        "Verification link has expired. Please subscribe again to receive a new link.",
+      );
+    }
+
     subscriber.status = SubscriberStatus.ACTIVE;
     subscriber.verifiedAt = new Date();
     subscriber.verificationToken = null;
+    subscriber.verificationTokenExpiresAt = null;
 
     if (!subscriber.unsubscribeToken) {
       subscriber.unsubscribeToken = createToken();
@@ -314,6 +328,7 @@ export class NewsletterService implements NewsletterJobWorker {
 
     subscriber.status = SubscriberStatus.PENDING;
     subscriber.verificationToken = verificationToken;
+    subscriber.verificationTokenExpiresAt = new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS);
     subscriber.unsubscribeToken = unsubscribeToken;
     subscriber.verifiedAt = null;
 

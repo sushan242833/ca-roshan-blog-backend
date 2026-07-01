@@ -65,6 +65,12 @@ export class PayloadTooLargeError extends HttpError {
   }
 }
 
+export class GoneError extends HttpError {
+  constructor(message: string, details?: unknown) {
+    super(410, message, "GONE", details);
+  }
+}
+
 export class InternalServerError extends HttpError {
   constructor(message: string, details?: unknown) {
     super(500, message, "INTERNAL_SERVER_ERROR", details);
