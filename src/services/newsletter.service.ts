@@ -123,10 +123,9 @@ export class NewsletterService implements NewsletterJobWorker {
         if (
           existing &&
           !existing.deletedAt &&
-          (existing.status === SubscriberStatus.ACTIVE ||
-            existing.status === SubscriberStatus.PENDING)
+          existing.status === SubscriberStatus.ACTIVE
         ) {
-          throw new ConflictError("Email is already subscribed.");
+          throw new ConflictError("This email is already subscribed and verified.");
         }
 
         const subscriber = existing
@@ -343,12 +342,12 @@ export class NewsletterService implements NewsletterJobWorker {
     return buildVerificationEmail({
       email,
       verificationUrl: buildUrl(
-        env.API_BASE_URL,
-        `/api/v1/subscribers/verify/${encodeURIComponent(verificationToken)}`,
+        env.APP_BASE_URL,
+        `/verify?token=${encodeURIComponent(verificationToken)}`,
       ),
       unsubscribeUrl: buildUrl(
-        env.API_BASE_URL,
-        `/api/v1/subscribers/unsubscribe/${encodeURIComponent(unsubscribeToken)}`,
+        env.APP_BASE_URL,
+        `/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`,
       ),
     });
   }
