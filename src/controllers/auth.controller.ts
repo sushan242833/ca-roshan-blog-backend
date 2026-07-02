@@ -120,16 +120,50 @@ export async function updateProfile(
     if (!admin)
       return res.status(401).json({ success: false, message: "Unauthorized" });
 
-    const { title, bio, avatarUrl } = req.body as {
+    const {
+      title,
+      bio,
+      avatarUrl,
+      location,
+      yearsOfExperience,
+      qualification,
+      bioParagraph2,
+      professionalQuote,
+      expertise,
+      closingMessage,
+      seoTitle,
+      seoDescription,
+      ogImageUrl,
+    } = req.body as {
       title?: string | null;
       bio?: string | null;
       avatarUrl?: string | null;
+      location?: string | null;
+      yearsOfExperience?: string | null;
+      qualification?: string | null;
+      bioParagraph2?: string | null;
+      professionalQuote?: string | null;
+      expertise?: string | null;
+      closingMessage?: string | null;
+      seoTitle?: string | null;
+      seoDescription?: string | null;
+      ogImageUrl?: string | null;
     };
 
     const updated = await authService.updateProfile(admin.id, {
       title,
       bio,
       avatarUrl,
+      location,
+      yearsOfExperience,
+      qualification,
+      bioParagraph2,
+      professionalQuote,
+      expertise,
+      closingMessage,
+      seoTitle,
+      seoDescription,
+      ogImageUrl,
     });
 
     return res.json({ success: true, data: updated });
@@ -138,4 +172,22 @@ export async function updateProfile(
   }
 }
 
-export default { login, logout, refresh, me, updateProfile };
+export async function getAboutPage(
+  _req: Request<EmptyRequestParams, unknown, EmptyRequestBody>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const data = await authService.getAboutPage();
+    if (!data) {
+      return res
+        .status(404)
+        .json({ success: false, message: "About page not configured." });
+    }
+    return res.json({ success: true, data });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export default { login, logout, refresh, me, updateProfile, getAboutPage };

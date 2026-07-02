@@ -1,2 +1,1 @@
-// dto placeholder
-export {};
+export * from "./about-page.dto";

@@ -1,7 +1,6 @@
 import "reflect-metadata";
 import sequelize from "@config/config";
-import { QueryInterface } from "sequelize";
-import { up as seedAdmin } from "@database/seeders/001-admin-seeder";
+import { seed as seedAdmin } from "@database/seeders/001-admin-seeder";
 import { registerModels } from "@models/index";
 
 async function runSeed(): Promise<number> {
@@ -11,8 +10,7 @@ async function runSeed(): Promise<number> {
     await sequelize.authenticate();
     console.log("Database connected");
 
-    const queryInterface: QueryInterface = sequelize.getQueryInterface();
-    await seedAdmin(queryInterface);
+    await seedAdmin();
 
     console.log("Admin seed completed");
     return 0;

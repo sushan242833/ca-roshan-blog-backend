@@ -9,6 +9,10 @@ import {
 } from "@app-types/http.requests";
 
 const router = Router();
+router.get<EmptyRequestParams, unknown, EmptyRequestBody>(
+  "/about",
+  controller.getAboutPage,
+);
 router.post<EmptyRequestParams, unknown, LoginRequest>(
   "/login",
   validateLogin,

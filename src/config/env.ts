@@ -29,6 +29,10 @@ export interface Env {
   EMAIL_FROM: string;
   CONTACT_EMAIL: string;
   NEWSLETTER_EMAIL_RATE_LIMIT_PER_SECOND: number;
+  // Only used at seed time (npm run db:seed-admin), never at runtime.
+  ADMIN_EMAIL?: string;
+  ADMIN_PASSWORD?: string;
+  ADMIN_NAME?: string;
 }
 
 function getEnv(name: string, fallback?: string): string {
@@ -103,6 +107,9 @@ const env: Env = {
     "NEWSLETTER_EMAIL_RATE_LIMIT_PER_SECOND",
     "2",
   ),
+  ADMIN_EMAIL: getOptionalEnv("ADMIN_EMAIL"),
+  ADMIN_PASSWORD: getOptionalEnv("ADMIN_PASSWORD"),
+  ADMIN_NAME: getOptionalEnv("ADMIN_NAME"),
 };
 
 export { env };
