@@ -1,9 +1,9 @@
-import { Op, QueryTypes, Transaction } from "sequelize";
+import { QueryTypes } from "sequelize";
 import { sequelize, Category } from "@models/index";
 import { CreateCategoryDto } from "@dto/create-category.dto";
 import { UpdateCategoryDto } from "@dto/update-category.dto";
-import { ConflictError, NotFoundError } from "@errors/http-error";
-import { slugify } from "@utils/index";
+import { NotFoundError } from "@errors/http-error";
+import SlugEntityService from "@services/base/slug-entity.service";
 
 export interface CategoryWithCount {
   id: string;
@@ -15,64 +15,18 @@ export interface CategoryWithCount {
 }
 
 class CategoryService {
-  private async generateUniqueSlug(name: string, transaction: Transaction): Promise<string> {
-    const base = slugify(name);
-    let slug = base;
-    let idx = 1;
-    // eslint-disable-next-line no-await-in-loop
-    while (await Category.findOne({ where: { slug }, transaction })) {
-      slug = `${base}-${idx}`;
-      idx += 1;
-    }
-    return slug;
-  }
+  private readonly base = new SlugEntityService<Category>(Category, "Category");
 
   async create(dto: CreateCategoryDto): Promise<Category> {
-    return sequelize.transaction(async (t) => {
-      const slug = dto.slug
-        ? slugify(dto.slug)
-        : await this.generateUniqueSlug(dto.name, t);
-      const existing = await Category.findOne({
-        where: { slug },
-        transaction: t,
-      });
-      if (existing)
-        throw new ConflictError("Category slug already exists.");
-      const category = await Category.create(
-        { name: dto.name, slug },
-        { transaction: t },
-      );
-      return category;
-    });
+    return this.base.create(dto);
   }
 
   async update(id: string, dto: UpdateCategoryDto): Promise<Category> {
-    return sequelize.transaction(async (t) => {
-      const category = await Category.findByPk(id, { transaction: t });
-      if (!category) throw new NotFoundError("Category not found.");
-      if (dto.name) category.name = dto.name;
-      if (dto.slug) {
-        const newSlug = slugify(dto.slug);
-        const existing = await Category.findOne({
-          where: { slug: newSlug, id: { [Op.ne]: id } },
-          transaction: t,
-        });
-        if (existing)
-          throw new ConflictError("Category slug already exists.");
-        category.slug = newSlug;
-      }
-      await category.save({ transaction: t });
-      return category;
-    });
+    return this.base.update(id, dto);
   }
 
   async delete(id: string): Promise<boolean> {
-    return sequelize.transaction(async (t) => {
-      const category = await Category.findByPk(id, { transaction: t });
-      if (!category) throw new NotFoundError("Category not found.");
-      await category.destroy({ transaction: t });
-      return true;
-    });
+    return this.base.delete(id);
   }
 
   async getAll(): Promise<CategoryWithCount[]> {

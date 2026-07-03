@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import sequelize from "@config/config";
-import { Admin, Category, Post, Subscriber } from "@models/index";
+import { Admin, Category, Post, Subscriber, Tag } from "@models/index";
 import { PostStatus } from "@models/post.model";
 import { SubscriberStatus } from "@models/subscriber.model";
 import { hashValue } from "@utils/bcrypt";
@@ -29,6 +29,11 @@ interface CreateAdminOptions {
 }
 
 interface CreateCategoryOptions {
+  name?: string;
+  slug?: string;
+}
+
+interface CreateTagOptions {
   name?: string;
   slug?: string;
 }
@@ -118,6 +123,15 @@ export async function createCategory(
   const slug = options.slug ?? uniqueSlug("test-category");
 
   return Category.create({ name, slug });
+}
+
+export async function createTag(
+  options: CreateTagOptions = {},
+): Promise<Tag> {
+  const name = options.name ?? "Test Tag";
+  const slug = options.slug ?? uniqueSlug("test-tag");
+
+  return Tag.create({ name, slug });
 }
 
 export async function createPost(
