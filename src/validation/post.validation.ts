@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { ValidationError, ValidationIssue } from "@errors/http-error";
+import { NotFoundError, ValidationError, ValidationIssue } from "@errors/http-error";
 import { PostStatus } from "@models/post.model";
 import { EmptyRequestParams, IdRequestParams } from "@app-types/http.requests";
 
@@ -165,6 +165,21 @@ function validatePostBody(
   return next();
 }
 
+// A malformed id can never match a post, so it is a 404 rather than a 400 —
+// this also keeps non-UUID strings away from Postgres, which would otherwise
+// throw a cast error inside the repository.
+export function validatePostIdParam(
+  req: Request<IdRequestParams, unknown, unknown>,
+  _res: Response,
+  next: NextFunction,
+) {
+  if (!UUID_REGEX.test(req.params.id)) {
+    return next(new NotFoundError("Post not found."));
+  }
+
+  return next();
+}
+
 export function validateCreatePost(
   req: Request<EmptyRequestParams, unknown, unknown>,
   _res: Response,
@@ -181,4 +196,4 @@ export function validateUpdatePost(
   return validatePostBody(req, [], next);
 }
 
-export default { validateCreatePost, validateUpdatePost };
+export default { validateCreatePost, validateUpdatePost, validatePostIdParam };

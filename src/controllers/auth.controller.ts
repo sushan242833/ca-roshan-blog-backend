@@ -26,7 +26,7 @@ export async function login(
     res.cookie(COOKIE_NAME, refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "none",
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: "/",
     });
@@ -52,6 +52,7 @@ export async function logout(
     res.clearCookie(COOKIE_NAME, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
+      sameSite: "none",
       path: "/",
     });
     return res.json({ success: true });
@@ -80,7 +81,7 @@ export async function refresh(
     res.cookie(COOKIE_NAME, tokens.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "none",
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: "/",
     });

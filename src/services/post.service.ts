@@ -452,6 +452,19 @@ export class PostService {
     );
   }
 
+  // Admin fetch for the post editor: any status, but never soft-deleted, and
+  // never counted as a view (unlike the public getBySlug).
+  async getAdminById(postId: string): Promise<PostDetailResponse> {
+    const post = await this.repository.findById(postId, {
+      withAssociations: true,
+    });
+    if (!post) {
+      throw new NotFoundError("Post not found.");
+    }
+
+    return toPostDetailResponse(post);
+  }
+
   private async transitionStatus(
     postId: string,
     status: PostStatus,

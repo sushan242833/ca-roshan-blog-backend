@@ -302,6 +302,19 @@ export async function getByPreviewToken(
   }
 }
 
+export async function getAdminPostById(
+  req: Request<IdRequestParams, unknown, EmptyRequestBody>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const post = await postService.getAdminById(req.params.id);
+    return res.json({ success: true, data: post });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 export default {
   createPost,
   updatePost,
@@ -317,4 +330,5 @@ export default {
   getDashboardStats,
   generatePreviewToken,
   getByPreviewToken,
+  getAdminPostById,
 };

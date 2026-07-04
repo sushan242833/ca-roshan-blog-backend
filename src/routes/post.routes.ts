@@ -3,6 +3,7 @@ import * as controller from "@controllers/post.controller";
 import { authMiddleware } from "@middleware/auth.middleware";
 import {
   validateCreatePost,
+  validatePostIdParam,
   validateUpdatePost,
 } from "@validation/post.validation";
 import {
@@ -32,6 +33,14 @@ router.get<EmptyRequestParams, unknown, EmptyRequestBody>(
   "/admin/stats",
   authMiddleware,
   controller.getDashboardStats,
+);
+// Registered after the literal /admin/* routes (which win by order) and
+// before the GET /:slug catch-all.
+router.get<IdRequestParams, unknown, EmptyRequestBody>(
+  "/admin/:id",
+  authMiddleware,
+  validatePostIdParam,
+  controller.getAdminPostById,
 );
 router.post<EmptyRequestParams, unknown, CreatePostRequest>(
   "/",
