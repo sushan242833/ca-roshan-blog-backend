@@ -8,6 +8,19 @@ import {
 
 const COOKIE_NAME = "refreshToken";
 
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
+// Browsers silently drop SameSite=None cookies that lack the Secure attribute,
+// and Secure can't be satisfied on plain-HTTP local dev — so None is reserved
+// for production HTTPS. Locally, Lax suffices: localhost:3000 → localhost:4000
+// is same-site (ports are ignored), so the cookie still accompanies fetches.
+const REFRESH_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: IS_PRODUCTION,
+  sameSite: IS_PRODUCTION ? ("none" as const) : ("lax" as const),
+  path: "/",
+};
+
 export async function login(
   req: Request<EmptyRequestParams, unknown, LoginRequest>,
   res: Response,
@@ -24,11 +37,8 @@ export async function login(
     const { accessToken, refreshToken } = result.tokens;
 
     res.cookie(COOKIE_NAME, refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "none",
+      ...REFRESH_COOKIE_OPTIONS,
       maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: "/",
     });
 
     return res.json({
@@ -49,12 +59,7 @@ export async function logout(
     const admin = req.user;
     if (!admin) return res.status(200).json({ success: true });
     await authService.logout(admin.id);
-    res.clearCookie(COOKIE_NAME, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "none",
-      path: "/",
-    });
+    res.clearCookie(COOKIE_NAME, REFRESH_COOKIE_OPTIONS);
     return res.json({ success: true });
   } catch (err) {
     return next(err);
@@ -79,11 +84,8 @@ export async function refresh(
         .json({ success: false, message: "Invalid refresh token" });
 
     res.cookie(COOKIE_NAME, tokens.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "none",
+      ...REFRESH_COOKIE_OPTIONS,
       maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: "/",
     });
 
     return res.json({
