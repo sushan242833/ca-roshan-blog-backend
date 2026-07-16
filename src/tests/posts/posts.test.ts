@@ -27,6 +27,13 @@ interface PostDetailResponseBody {
   };
 }
 
+interface PostListResponseBody {
+  success: boolean;
+  data: {
+    items: { id: string; slug: string; title: string }[];
+  };
+}
+
 describe("posts", () => {
   beforeEach(async () => {
     await setupIntegrationTest();
@@ -92,5 +99,30 @@ describe("posts", () => {
       .get("/api/v1/posts/admin/not-a-uuid")
       .set("Authorization", `Bearer ${login.accessToken}`)
       .expect(404);
+  });
+
+  // Task 3: search matches the post body, not only title/excerpt. The token
+  // appears ONLY in content (createPost hardcodes title/excerpt without it),
+  // so a hit proves buildSearchWhere now includes the content column.
+  it("finds a published post by a term that appears only in its content", async () => {
+    const admin = await createAdmin();
+    const token = "quantumleviededuction";
+    const post = await createPost({
+      adminId: admin.admin.id,
+      status: PostStatus.PUBLISHED,
+      title: "An Unrelated Heading",
+      content: `<p>Deep in the article body we mention ${token} exactly once.</p>`,
+    });
+
+    const response = await createTestRequest()
+      .get(`/api/v1/posts?search=${token}`)
+      .expect(200);
+    const body = response.body as PostListResponseBody;
+
+    assert.equal(body.success, true);
+    assert.ok(
+      body.data.items.some((item) => item.id === post.id),
+      "expected the content-only match to be returned",
+    );
   });
 });

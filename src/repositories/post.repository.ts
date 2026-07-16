@@ -101,6 +101,11 @@ function buildSearchWhere(search?: string): WhereOptions<PostAttributes> | null 
     [Op.or]: [
       { title: { [Op.iLike]: pattern } },
       { excerpt: { [Op.iLike]: pattern } },
+      // Content is stored as HTML, so a term can technically match inside a
+      // tag or attribute rather than visible text. That's an accepted
+      // tradeoff for a simple ILIKE search at this project's scale — a
+      // full-text (tsvector) solution would be unwarranted complexity here.
+      { content: { [Op.iLike]: pattern } },
     ],
   };
 }
