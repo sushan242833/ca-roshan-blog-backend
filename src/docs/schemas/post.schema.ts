@@ -63,6 +63,8 @@ export const postSchemas: SchemaCollection = {
       "viewCount",
       "metaTitle",
       "metaDescription",
+      "pdfUrl",
+      "pdfLabel",
       "publishedAt",
       "createdAt",
       "updatedAt",
@@ -115,6 +117,21 @@ export const postSchemas: SchemaCollection = {
         type: "string",
         nullable: true,
         example: "Design and operate reliable Express APIs with TypeScript.",
+      },
+      pdfUrl: {
+        type: "string",
+        nullable: true,
+        maxLength: 2048,
+        description:
+          "Link to a full-content PDF: an http(s) URL or a /uploads/ path.",
+        example: "http://localhost:4000/uploads/full-report.pdf",
+      },
+      pdfLabel: {
+        type: "string",
+        nullable: true,
+        maxLength: 255,
+        description: "Optional custom link text for the PDF callout.",
+        example: "Read the full content (PDF)",
       },
       publishedAt: {
         type: "string",
@@ -179,6 +196,8 @@ export const postSchemas: SchemaCollection = {
       viewCount: 128,
       metaTitle: "Production Grade REST APIs",
       metaDescription: "Design and operate reliable Express APIs with TypeScript.",
+      pdfUrl: "http://localhost:4000/uploads/full-report.pdf",
+      pdfLabel: "Read the full content (PDF)",
       publishedAt: "2026-06-22T08:30:00.000Z",
       createdAt: "2026-06-22T08:15:30.000Z",
       updatedAt: "2026-06-22T08:30:00.000Z",
@@ -243,6 +262,21 @@ export const postSchemas: SchemaCollection = {
         nullable: true,
         maxLength: 160,
         example: "Design and operate reliable Express APIs with TypeScript.",
+      },
+      pdfUrl: {
+        type: "string",
+        nullable: true,
+        maxLength: 2048,
+        description:
+          "Full-content PDF link: an http(s) URL or a /uploads/ path. Send null to clear.",
+        example: "http://localhost:4000/uploads/full-report.pdf",
+      },
+      pdfLabel: {
+        type: "string",
+        nullable: true,
+        maxLength: 255,
+        description: "Optional custom link text. Send null to clear.",
+        example: "Read the full content (PDF)",
       },
       status: {
         $ref: "#/components/schemas/PostStatus",
@@ -312,6 +346,21 @@ export const postSchemas: SchemaCollection = {
         nullable: true,
         maxLength: 160,
         example: "An updated description for search results.",
+      },
+      pdfUrl: {
+        type: "string",
+        nullable: true,
+        maxLength: 2048,
+        description:
+          "Full-content PDF link: an http(s) URL or a /uploads/ path. Send null to clear.",
+        example: "/uploads/full-report.pdf",
+      },
+      pdfLabel: {
+        type: "string",
+        nullable: true,
+        maxLength: 255,
+        description: "Optional custom link text. Send null to clear.",
+        example: "Read the full content (PDF)",
       },
       status: {
         $ref: "#/components/schemas/PostStatus",

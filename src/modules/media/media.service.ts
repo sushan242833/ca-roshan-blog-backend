@@ -1,6 +1,7 @@
 import { Media, MediaCreationAttributes, MediaProvider } from "./media.model";
 import mediaRepository, { MediaRepository } from "./media.repository";
 import {
+  MediaKind,
   UploadMediaDto,
   assertUploadMediaDto,
   toMediaIdParamDto,
@@ -46,8 +47,8 @@ export class MediaService {
     }
   }
 
-  async listAll(): Promise<Media[]> {
-    return this.repository.findAll();
+  async listAll(kind?: MediaKind): Promise<Media[]> {
+    return this.repository.findAll(kind);
   }
 
   async getById(id: string): Promise<Media> {

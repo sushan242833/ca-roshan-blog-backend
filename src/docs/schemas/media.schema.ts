@@ -12,6 +12,7 @@ export const mediaSchemas: SchemaCollection = {
       "fileName",
       "originalName",
       "mimeType",
+      "kind",
       "size",
       "url",
       "provider",
@@ -34,13 +35,20 @@ export const mediaSchemas: SchemaCollection = {
       },
       mimeType: {
         type: "string",
-        enum: ["image/jpeg", "image/png", "image/webp"],
+        enum: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
         example: "image/webp",
+      },
+      kind: {
+        type: "string",
+        enum: ["image", "document"],
+        description: "Derived from the MIME type; PDFs are documents.",
+        example: "image",
       },
       size: {
         type: "integer",
         minimum: 1,
-        maximum: 5242880,
+        maximum: 20971520,
+        description: "Bytes. Images may be up to 5MB, PDFs up to 20MB.",
         example: 184320,
       },
       url: {
@@ -73,7 +81,8 @@ export const mediaSchemas: SchemaCollection = {
       file: {
         type: "string",
         format: "binary",
-        description: "JPEG, PNG, or WEBP image. Maximum size: 5MB.",
+        description:
+          "JPEG, PNG, or WEBP image (max 5MB) or a PDF document (max 20MB).",
       },
     },
   },
@@ -101,6 +110,7 @@ export const mediaSchemas: SchemaCollection = {
         fileName: "ba038339-5f8e-46fb-961a-333333333333.webp",
         originalName: "hero-image.webp",
         mimeType: "image/webp",
+        kind: "image",
         size: 184320,
         url: "http://localhost:4000/uploads/ba038339-5f8e-46fb-961a-333333333333.webp",
         provider: "LOCAL",

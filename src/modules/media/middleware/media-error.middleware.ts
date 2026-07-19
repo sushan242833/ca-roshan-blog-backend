@@ -28,7 +28,7 @@ function mapToHttpError(error: unknown): HttpError {
   if (error instanceof multer.MulterError) {
     if (error.code === "LIMIT_FILE_SIZE") {
       return new PayloadTooLargeError(
-        "File too large. Maximum allowed size is 5MB.",
+        "File too large. Images may be up to 5MB and PDFs up to 20MB.",
       );
     }
 

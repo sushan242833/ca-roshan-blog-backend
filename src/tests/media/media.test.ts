@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import { randomUUID } from "crypto";
 import fs from "fs/promises";
 import path from "path";
-import { MAX_MEDIA_UPLOAD_SIZE_BYTES } from "@modules/media/media.dto";
+import {
+  MAX_DOCUMENT_UPLOAD_SIZE_BYTES,
+  MAX_MEDIA_UPLOAD_SIZE_BYTES,
+} from "@modules/media/media.dto";
 import {
   createTestRequest,
   setupIntegrationTest,
@@ -16,6 +19,7 @@ interface MediaResponseDto {
   fileName: string;
   originalName: string;
   mimeType: string;
+  kind: string;
   size: number;
   url: string;
   provider: string;
@@ -39,6 +43,13 @@ const TINY_PNG = Buffer.from(
   "base64",
 );
 
+// A minimal PDF byte stream. The upload path trusts the multipart content
+// type rather than sniffing bytes, so a short valid header is enough.
+const TINY_PDF = Buffer.from(
+  "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF",
+  "utf8",
+);
+
 const uploadedFileNames = new Set<string>();
 
 function uploadedFilePath(fileName: string): string {
@@ -59,6 +70,21 @@ async function uploadTinyPng(accessToken: string): Promise<MediaResponseDto> {
     .post("/api/v1/media/upload")
     .set("Authorization", `Bearer ${accessToken}`)
     .attach("file", TINY_PNG, { filename: "tiny.png", contentType: "image/png" })
+    .expect(201);
+  const body = response.body as MediaResponseBody;
+
+  uploadedFileNames.add(body.data.fileName);
+  return body.data;
+}
+
+async function uploadTinyPdf(accessToken: string): Promise<MediaResponseDto> {
+  const response = await createTestRequest()
+    .post("/api/v1/media/upload")
+    .set("Authorization", `Bearer ${accessToken}`)
+    .attach("file", TINY_PDF, {
+      filename: "report.pdf",
+      contentType: "application/pdf",
+    })
     .expect(201);
   const body = response.body as MediaResponseBody;
 
@@ -175,5 +201,74 @@ describe("media", () => {
       .delete(`/api/v1/media/${randomUUID()}`)
       .set("Authorization", `Bearer ${login.accessToken}`)
       .expect(404);
+  });
+
+  it("uploads a valid pdf, tags it as a document, and stores a .pdf file", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+
+    const media = await uploadTinyPdf(login.accessToken);
+
+    assert.equal(media.mimeType, "application/pdf");
+    assert.equal(media.kind, "document");
+    assert.ok(media.fileName.endsWith(".pdf"));
+    assert.equal(media.size, TINY_PDF.length);
+    assert.equal(await fileExists(uploadedFilePath(media.fileName)), true);
+  });
+
+  it("rejects a pdf larger than the document size limit", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+    const oversized = Buffer.alloc(MAX_DOCUMENT_UPLOAD_SIZE_BYTES + 1);
+
+    await createTestRequest()
+      .post("/api/v1/media/upload")
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .attach("file", oversized, {
+        filename: "huge.pdf",
+        contentType: "application/pdf",
+      })
+      .expect(413);
+  });
+
+  it("rejects a disallowed document type (application/zip)", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+
+    await createTestRequest()
+      .post("/api/v1/media/upload")
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .attach("file", Buffer.from("PK zip bytes"), {
+        filename: "archive.zip",
+        contentType: "application/zip",
+      })
+      .expect(415);
+  });
+
+  it("filters the media list by kind via ?type=document", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+    const image = await uploadTinyPng(login.accessToken);
+    const pdf = await uploadTinyPdf(login.accessToken);
+
+    const docsResponse = await createTestRequest()
+      .get("/api/v1/media?type=document")
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .expect(200);
+    const docs = docsResponse.body as MediaListResponseBody;
+
+    assert.equal(docs.data.length, 1);
+    assert.equal(docs.data[0].id, pdf.id);
+    assert.equal(docs.data[0].kind, "document");
+
+    const imagesResponse = await createTestRequest()
+      .get("/api/v1/media?type=image")
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .expect(200);
+    const images = imagesResponse.body as MediaListResponseBody;
+
+    assert.equal(images.data.length, 1);
+    assert.equal(images.data[0].id, image.id);
+    assert.equal(images.data[0].kind, "image");
   });
 });

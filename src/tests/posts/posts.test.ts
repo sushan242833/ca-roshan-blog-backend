@@ -34,6 +34,15 @@ interface PostListResponseBody {
   };
 }
 
+interface PostPdfResponseBody {
+  success: boolean;
+  data: {
+    id: string;
+    pdfUrl: string | null;
+    pdfLabel: string | null;
+  };
+}
+
 describe("posts", () => {
   beforeEach(async () => {
     await setupIntegrationTest();
@@ -124,5 +133,92 @@ describe("posts", () => {
       body.data.items.some((item) => item.id === post.id),
       "expected the content-only match to be returned",
     );
+  });
+
+  // Full content PDF: create accepts pdfUrl + pdfLabel and echoes them back.
+  it("creates a post with a full-content PDF url and label", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+
+    const response = await createTestRequest()
+      .post("/api/v1/posts")
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .send({
+        title: "Post With PDF",
+        content: "<p>Short summary; the full version is attached.</p>",
+        pdfUrl: "https://example.com/reports/full.pdf",
+        pdfLabel: "Download the full report (PDF)",
+      })
+      .expect(201);
+    const body = response.body as PostPdfResponseBody;
+
+    assert.equal(body.data.pdfUrl, "https://example.com/reports/full.pdf");
+    assert.equal(body.data.pdfLabel, "Download the full report (PDF)");
+  });
+
+  // A relative /uploads/ path (self-hosted media) is accepted too.
+  it("accepts a relative /uploads/ pdf path", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+
+    const response = await createTestRequest()
+      .post("/api/v1/posts")
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .send({
+        title: "Self Hosted PDF",
+        content: "<p>Body.</p>",
+        pdfUrl: "/uploads/9f8e7d6c-5b4a-4938-8271-605040302010.pdf",
+      })
+      .expect(201);
+    const body = response.body as PostPdfResponseBody;
+
+    assert.equal(
+      body.data.pdfUrl,
+      "/uploads/9f8e7d6c-5b4a-4938-8271-605040302010.pdf",
+    );
+  });
+
+  it("rejects a post with an invalid (non-http, non-/uploads) pdf url", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+
+    await createTestRequest()
+      .post("/api/v1/posts")
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .send({
+        title: "Bad PDF",
+        content: "<p>Body.</p>",
+        pdfUrl: "javascript:alert(1)",
+      })
+      .expect(400);
+  });
+
+  // Sending null on update clears both fields — the "Remove PDF" flow.
+  it("clears the pdf fields when sent null on update", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+
+    const created = await createTestRequest()
+      .post("/api/v1/posts")
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .send({
+        title: "Post To Clear",
+        content: "<p>Body.</p>",
+        pdfUrl: "https://example.com/full.pdf",
+        pdfLabel: "Full version",
+      })
+      .expect(201);
+    const createdBody = created.body as PostPdfResponseBody;
+    assert.equal(createdBody.data.pdfUrl, "https://example.com/full.pdf");
+
+    const updated = await createTestRequest()
+      .patch(`/api/v1/posts/${createdBody.data.id}`)
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .send({ pdfUrl: null, pdfLabel: null })
+      .expect(200);
+    const updatedBody = updated.body as PostPdfResponseBody;
+
+    assert.equal(updatedBody.data.pdfUrl, null);
+    assert.equal(updatedBody.data.pdfLabel, null);
   });
 });

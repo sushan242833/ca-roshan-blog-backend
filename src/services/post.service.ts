@@ -162,6 +162,8 @@ export class PostService {
       const metaTitle = normalizeOptionalString(dto.metaTitle) ?? title;
       const metaDescription =
         normalizeOptionalString(dto.metaDescription) ?? excerpt;
+      const pdfUrl = normalizeOptionalString(dto.pdfUrl);
+      const pdfLabel = normalizeOptionalString(dto.pdfLabel);
       const status = resolveCreateStatus(dto);
       const categoryIds = uniqueValues(dto.categoryIds);
       const tagIds = uniqueValues(dto.tagIds);
@@ -185,6 +187,8 @@ export class PostService {
         categoryId: dto.categoryId ?? null,
         metaTitle,
         metaDescription,
+        pdfUrl,
+        pdfLabel,
         status,
         featured: dto.featured ?? false,
         readingTime: calculateReadingTime(content),
@@ -280,6 +284,16 @@ export class PostService {
       }
 
       validateSeo(post.metaTitle ?? null, post.metaDescription ?? null);
+
+      // Sending null (or an empty string) clears the PDF; undefined leaves it
+      // untouched, mirroring how the optional SEO fields flow through above.
+      if (typeof dto.pdfUrl !== "undefined") {
+        post.pdfUrl = normalizeOptionalString(dto.pdfUrl);
+      }
+
+      if (typeof dto.pdfLabel !== "undefined") {
+        post.pdfLabel = normalizeOptionalString(dto.pdfLabel);
+      }
 
       if (dto.categoryIds) {
         const categoryIds = uniqueValues(dto.categoryIds);

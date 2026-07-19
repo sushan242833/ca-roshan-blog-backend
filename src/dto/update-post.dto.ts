@@ -9,6 +9,8 @@ export interface UpdatePostDto {
   categoryId?: string | null;
   metaTitle?: string | null;
   metaDescription?: string | null;
+  pdfUrl?: string | null;
+  pdfLabel?: string | null;
   status?: PostStatus;
   featured?: boolean;
   categoryIds?: string[];

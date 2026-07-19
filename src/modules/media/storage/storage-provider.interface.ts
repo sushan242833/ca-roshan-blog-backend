@@ -1,9 +1,9 @@
-import { AllowedImageMimeType } from "../media.dto";
+import { AllowedMimeType } from "../media.dto";
 
 export interface StorageUploadFile {
   fileName: string;
   buffer: Buffer;
-  mimeType: AllowedImageMimeType;
+  mimeType: AllowedMimeType;
   size: number;
 }
 

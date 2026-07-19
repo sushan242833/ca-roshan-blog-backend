@@ -33,6 +33,8 @@ export interface PostSummaryResponse {
   viewCount: number;
   metaTitle: string | null;
   metaDescription: string | null;
+  pdfUrl: string | null;
+  pdfLabel: string | null;
   publishedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -91,6 +93,8 @@ export function toPostSummaryResponse(post: Post): PostSummaryResponse {
     viewCount: post.viewCount,
     metaTitle: post.metaTitle ?? null,
     metaDescription: post.metaDescription ?? null,
+    pdfUrl: post.pdfUrl ?? null,
+    pdfLabel: post.pdfLabel ?? null,
     publishedAt: post.publishedAt ?? null,
     createdAt: post.createdAt,
     updatedAt: post.updatedAt,

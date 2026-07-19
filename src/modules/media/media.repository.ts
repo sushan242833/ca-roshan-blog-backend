@@ -1,13 +1,31 @@
-import { Transaction } from "sequelize";
-import { Media, MediaCreationAttributes } from "./media.model";
+import { Op, Transaction, WhereOptions } from "sequelize";
+import { Media, MediaAttributes, MediaCreationAttributes } from "./media.model";
+import {
+  ALLOWED_DOCUMENT_MIME_TYPES,
+  ALLOWED_IMAGE_MIME_TYPES,
+  MediaKind,
+} from "./media.dto";
 
 export class MediaRepository {
   async create(payload: MediaCreationAttributes): Promise<Media> {
     return Media.create(payload);
   }
 
-  async findAll(): Promise<Media[]> {
+  async findAll(kind?: MediaKind): Promise<Media[]> {
+    const where: WhereOptions<MediaAttributes> | undefined =
+      kind === undefined
+        ? undefined
+        : {
+            mimeType: {
+              [Op.in]:
+                kind === "document"
+                  ? [...ALLOWED_DOCUMENT_MIME_TYPES]
+                  : [...ALLOWED_IMAGE_MIME_TYPES],
+            },
+          };
+
     return Media.findAll({
+      where,
       order: [["createdAt", "DESC"]],
     });
   }

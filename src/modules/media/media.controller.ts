@@ -1,7 +1,11 @@
 import { NextFunction, Request, Response } from "express";
 import mediaService from "./media.service";
 import { Media } from "./media.model";
-import { MediaUploadRequestShape } from "./media.dto";
+import {
+  MediaKind,
+  MediaUploadRequestShape,
+  resolveMediaKind,
+} from "./media.dto";
 import { BadRequestError } from "./media.errors";
 import { sendSuccess } from "./media.response";
 import {
@@ -15,6 +19,7 @@ interface MediaResponseDto {
   fileName: string;
   originalName: string;
   mimeType: string;
+  kind: MediaKind;
   size: number;
   url: string;
   provider: string;
@@ -28,12 +33,21 @@ function toMediaResponseDto(media: Media): MediaResponseDto {
     fileName: media.fileName,
     originalName: media.originalName,
     mimeType: media.mimeType,
+    kind: resolveMediaKind(media.mimeType),
     size: media.size,
     url: media.url,
     provider: media.provider,
     createdAt: media.createdAt,
     updatedAt: media.updatedAt,
   };
+}
+
+// ?type=image|document narrows the listing; anything else lists everything.
+function parseMediaKindQuery(value: unknown): MediaKind | undefined {
+  if (value === "image" || value === "document") {
+    return value;
+  }
+  return undefined;
 }
 
 class MediaController {
@@ -68,12 +82,13 @@ class MediaController {
   }
 
   async listAll(
-    _req: Request<EmptyRequestParams, unknown, EmptyRequestBody>,
+    req: Request<EmptyRequestParams, unknown, EmptyRequestBody>,
     res: Response,
     next: NextFunction,
   ) {
     try {
-      const mediaItems = await mediaService.listAll();
+      const kind = parseMediaKindQuery(req.query.type);
+      const mediaItems = await mediaService.listAll(kind);
       return sendSuccess(
         res,
         200,

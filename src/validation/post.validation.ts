@@ -7,6 +7,25 @@ const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_META_TITLE_LENGTH = 60;
 const MAX_META_DESCRIPTION_LENGTH = 160;
+const MAX_PDF_URL_LENGTH = 2048;
+const MAX_PDF_LABEL_LENGTH = 255;
+
+// A PDF link is either an absolute http(s) URL (external hosting) or a
+// relative path served from our own /uploads/ static route (self-hosted
+// media). Anything else — javascript:, data:, other schemes, arbitrary
+// paths — is rejected so the value can be rendered as a plain href safely.
+function isValidPdfUrl(value: string): boolean {
+  if (value.startsWith("/uploads/")) {
+    return true;
+  }
+
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -126,6 +145,42 @@ function validateSeoLengths(
   }
 }
 
+function validatePdfFields(
+  body: Record<string, unknown>,
+  errors: ValidationIssue[],
+): void {
+  const url = body.pdfUrl;
+  // undefined = field not sent (leave unchanged); null = explicit clear.
+  if (typeof url !== "undefined" && url !== null) {
+    if (typeof url !== "string") {
+      errors.push({ field: "pdfUrl", message: "pdfUrl must be a string." });
+    } else if (url.length > MAX_PDF_URL_LENGTH) {
+      errors.push({
+        field: "pdfUrl",
+        message: `pdfUrl must be ${MAX_PDF_URL_LENGTH} characters or fewer.`,
+      });
+    } else if (!isValidPdfUrl(url.trim())) {
+      errors.push({
+        field: "pdfUrl",
+        message:
+          "pdfUrl must be a valid http(s) URL or a path starting with /uploads/.",
+      });
+    }
+  }
+
+  const label = body.pdfLabel;
+  if (typeof label !== "undefined" && label !== null) {
+    if (typeof label !== "string") {
+      errors.push({ field: "pdfLabel", message: "pdfLabel must be a string." });
+    } else if (label.length > MAX_PDF_LABEL_LENGTH) {
+      errors.push({
+        field: "pdfLabel",
+        message: `pdfLabel must be ${MAX_PDF_LABEL_LENGTH} characters or fewer.`,
+      });
+    }
+  }
+}
+
 function validatePostBody(
   req: Request<EmptyRequestParams | IdRequestParams, unknown, unknown>,
   requiredFields: string[],
@@ -157,6 +212,7 @@ function validatePostBody(
   validateOptionalBoolean(body, "published", errors);
   validateStatus(body, errors);
   validateSeoLengths(body, errors);
+  validatePdfFields(body, errors);
 
   if (errors.length > 0) {
     return next(new ValidationError(errors));

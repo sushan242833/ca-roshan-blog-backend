@@ -7,7 +7,7 @@ export const mediaPaths: PathCollection = {
         "Media"
       ],
       "summary": "Upload media",
-      "description": "Uploads one image file. Supports JPEG, PNG, and WEBP up to 5MB. Requires admin authentication.",
+      "description": "Uploads one file. Supports JPEG, PNG, and WEBP images (up to 5MB) and PDF documents (up to 20MB). Requires admin authentication.",
       "requestBody": {
         "required": true,
         "content": {
@@ -17,7 +17,7 @@ export const mediaPaths: PathCollection = {
             },
             "encoding": {
               "file": {
-                "contentType": "image/jpeg, image/png, image/webp"
+                "contentType": "image/jpeg, image/png, image/webp, application/pdf"
               }
             }
           }
@@ -55,8 +55,20 @@ export const mediaPaths: PathCollection = {
         "Media"
       ],
       "summary": "List media",
-      "description": "Returns all media records.",
+      "description": "Returns all media records, optionally filtered by kind.",
       "security": [],
+      "parameters": [
+        {
+          "name": "type",
+          "in": "query",
+          "required": false,
+          "description": "Filter by media kind. Omit to return everything.",
+          "schema": {
+            "type": "string",
+            "enum": ["image", "document"]
+          }
+        }
+      ],
       "responses": {
         "200": {
           "description": "Media list fetched successfully.",

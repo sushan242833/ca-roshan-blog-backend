@@ -1,12 +1,12 @@
 import { NextFunction, Request, Response } from "express";
 import multer from "multer";
 import {
-  ALLOWED_IMAGE_MIME_TYPES,
   MediaUploadRequestShape,
-  MAX_MEDIA_UPLOAD_SIZE_BYTES,
+  MAX_DOCUMENT_UPLOAD_SIZE_BYTES,
   UploadMediaDto,
-  assertAllowedImageMimeType,
+  assertAllowedMimeType,
   buildStoredFileName,
+  isAllowedMimeType,
   sanitizeOriginalFileName,
 } from "../media.dto";
 import {
@@ -21,18 +21,17 @@ import {
 const multerUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: MAX_MEDIA_UPLOAD_SIZE_BYTES,
+    // Use the larger (document) ceiling here so PDFs are not rejected by
+    // multer before the per-kind size check runs; images above their own 5MB
+    // limit are still rejected by assertUploadMediaDto below.
+    fileSize: MAX_DOCUMENT_UPLOAD_SIZE_BYTES,
     files: 1,
   },
   fileFilter: (_req, file, callback) => {
-    if (
-      !ALLOWED_IMAGE_MIME_TYPES.includes(
-        file.mimetype as (typeof ALLOWED_IMAGE_MIME_TYPES)[number],
-      )
-    ) {
+    if (!isAllowedMimeType(file.mimetype)) {
       return callback(
         new UnsupportedMediaTypeError(
-          "Invalid file type. Only JPEG, PNG, and WEBP are allowed.",
+          "Invalid file type. Only JPEG, PNG, WEBP, and PDF are allowed.",
         ),
       );
     }
@@ -57,7 +56,7 @@ export function mediaUploadMiddleware(
     }
 
     try {
-      assertAllowedImageMimeType(req.file.mimetype);
+      assertAllowedMimeType(req.file.mimetype);
 
       const dto: UploadMediaDto = {
         fileName: buildStoredFileName(req.file.mimetype),
