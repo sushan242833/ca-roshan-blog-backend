@@ -38,6 +38,15 @@ function validateOptionalString(
   return null;
 }
 
+// name maps to a NOT NULL column, so when it is sent it must be a non-empty
+// string; omitting it entirely leaves the current name unchanged.
+function validateName(value: unknown): string | null {
+  if (typeof value === "undefined") return null;
+  if (typeof value !== "string" || !value.trim()) return "name is required.";
+  if (value.length > 255) return "name must be 255 characters or fewer.";
+  return null;
+}
+
 function validateExpertise(value: unknown): string | null {
   if (typeof value === "undefined" || value === null) return null;
   if (typeof value !== "string") return "expertise must be a string.";
@@ -63,6 +72,7 @@ export function validateUpdateProfile(
     return next(new BadRequestError("Request body is required."));
 
   const {
+    name,
     title,
     bio,
     avatarUrl,
@@ -79,6 +89,7 @@ export function validateUpdateProfile(
   } = body as Record<string, unknown>;
 
   const stringFieldErrors = [
+    validateName(name),
     validateOptionalString(title, "title", 150),
     validateOptionalString(bio, "bio"),
     validateOptionalString(avatarUrl, "avatarUrl", 500),

@@ -33,6 +33,7 @@ export interface AdminProfileResponse extends AboutPageResponse {
 }
 
 export interface UpdateProfileData {
+  name?: string;
   title?: string | null;
   bio?: string | null;
   avatarUrl?: string | null;
@@ -169,6 +170,10 @@ export class AuthService {
     const admin = await Admin.findByPk(adminId);
     if (!admin) throw new NotFoundError("Admin not found.");
 
+    // name is NOT NULL; only overwrite it with a real value (validation has
+    // already rejected an empty string when the field was sent).
+    if (typeof data.name === "string" && data.name.trim())
+      admin.name = data.name.trim();
     if (typeof data.title !== "undefined") admin.title = data.title;
     if (typeof data.bio !== "undefined") admin.bio = data.bio;
     if (typeof data.avatarUrl !== "undefined") admin.avatarUrl = data.avatarUrl;

@@ -124,6 +124,7 @@ export async function updateProfile(
       return res.status(401).json({ success: false, message: "Unauthorized" });
 
     const {
+      name,
       title,
       bio,
       avatarUrl,
@@ -138,6 +139,7 @@ export async function updateProfile(
       seoDescription,
       ogImageUrl,
     } = req.body as {
+      name?: string;
       title?: string | null;
       bio?: string | null;
       avatarUrl?: string | null;
@@ -154,6 +156,7 @@ export async function updateProfile(
     };
 
     const updated = await authService.updateProfile(admin.id, {
+      name,
       title,
       bio,
       avatarUrl,
