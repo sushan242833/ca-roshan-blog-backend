@@ -35,6 +35,7 @@ export interface PostSummaryResponse {
   metaDescription: string | null;
   pdfUrl: string | null;
   pdfLabel: string | null;
+  showFeaturedImage: boolean;
   publishedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -95,6 +96,7 @@ export function toPostSummaryResponse(post: Post): PostSummaryResponse {
     metaDescription: post.metaDescription ?? null,
     pdfUrl: post.pdfUrl ?? null,
     pdfLabel: post.pdfLabel ?? null,
+    showFeaturedImage: post.showFeaturedImage ?? true,
     publishedAt: post.publishedAt ?? null,
     createdAt: post.createdAt,
     updatedAt: post.updatedAt,

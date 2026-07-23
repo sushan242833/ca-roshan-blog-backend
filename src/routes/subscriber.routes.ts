@@ -22,6 +22,11 @@ router.get<VerifySubscriberRequest, unknown, EmptyRequestBody>(
   validateSubscriberToken,
   controller.verifySubscriber,
 );
+router.get<VerifySubscriberRequest, unknown, EmptyRequestBody>(
+  "/unsubscribe/:token",
+  validateSubscriberToken,
+  controller.getUnsubscribeStatus,
+);
 router.post<VerifySubscriberRequest, unknown, EmptyRequestBody>(
   "/unsubscribe/:token",
   validateSubscriberToken,

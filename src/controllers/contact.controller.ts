@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { env } from "@config/env";
 import { EmptyRequestParams } from "@app-types/http.requests";
-import resendEmailProvider from "@modules/newsletter/email/resend-email.provider";
+import emailProvider from "@modules/newsletter/email/email-provider";
 
 interface ContactFormBody {
   name: string;
@@ -20,7 +20,7 @@ export async function submitContactForm(
     const emailSubject = subject?.trim() || `New message from ${name}`;
     const safeMessage = message.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
 
-    await resendEmailProvider.sendEmail({
+    await emailProvider.sendEmail({
       to: env.CONTACT_EMAIL,
       subject: `[Contact Form] ${emailSubject}`,
       html: `<p><strong>Name:</strong> ${name}</p><p><strong>Email:</strong> ${email}</p><p><strong>Message:</strong></p><p>${safeMessage}</p>`,

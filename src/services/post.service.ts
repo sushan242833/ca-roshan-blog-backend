@@ -189,6 +189,7 @@ export class PostService {
         metaDescription,
         pdfUrl,
         pdfLabel,
+        showFeaturedImage: dto.showFeaturedImage ?? true,
         status,
         featured: dto.featured ?? false,
         readingTime: calculateReadingTime(content),
@@ -293,6 +294,10 @@ export class PostService {
 
       if (typeof dto.pdfLabel !== "undefined") {
         post.pdfLabel = normalizeOptionalString(dto.pdfLabel);
+      }
+
+      if (typeof dto.showFeaturedImage === "boolean") {
+        post.showFeaturedImage = dto.showFeaturedImage;
       }
 
       if (dto.categoryIds) {

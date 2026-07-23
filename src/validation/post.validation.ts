@@ -210,6 +210,7 @@ function validatePostBody(
   validateOptionalUuidArray(body, "tagIds", errors);
   validateOptionalBoolean(body, "featured", errors);
   validateOptionalBoolean(body, "published", errors);
+  validateOptionalBoolean(body, "showFeaturedImage", errors);
   validateStatus(body, errors);
   validateSeoLengths(body, errors);
   validatePdfFields(body, errors);

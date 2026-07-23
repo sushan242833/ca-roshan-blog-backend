@@ -95,6 +95,21 @@ export async function verifySubscriber(
   }
 }
 
+export async function getUnsubscribeStatus(
+  req: Request<VerifySubscriberRequest, unknown, EmptyRequestBody>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const subscriber = await newsletterService.getByUnsubscribeToken(
+      req.params.token,
+    );
+    return res.json({ success: true, data: subscriber });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 export async function unsubscribeSubscriber(
   req: Request<VerifySubscriberRequest, unknown, EmptyRequestBody>,
   res: Response,
@@ -142,6 +157,7 @@ export async function adminSubscriberStats(
 export default {
   createSubscriber,
   verifySubscriber,
+  getUnsubscribeStatus,
   unsubscribeSubscriber,
   adminListSubscribers,
   adminSubscriberStats,

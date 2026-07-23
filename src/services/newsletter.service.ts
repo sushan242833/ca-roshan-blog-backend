@@ -26,7 +26,7 @@ import {
   EmailProvider,
   SendEmailPayload,
 } from "@modules/newsletter/email/email-provider.interface";
-import resendEmailProvider from "@modules/newsletter/email/resend-email.provider";
+import defaultEmailProvider from "@modules/newsletter/email/email-provider";
 import { InProcessNewsletterJobQueue } from "@modules/newsletter/queue/in-process-newsletter-job.queue";
 import {
   NewsletterDeliveryJob,
@@ -97,7 +97,7 @@ export class NewsletterService implements NewsletterJobWorker {
   constructor(
     private readonly subscribers: SubscriberRepository = subscriberRepository,
     private readonly logs: NewsletterLogRepository = newsletterLogRepository,
-    private readonly emailProvider: EmailProvider = resendEmailProvider,
+    private readonly emailProvider: EmailProvider = defaultEmailProvider,
     queue?: NewsletterJobQueue,
   ) {
     this.queue =
@@ -153,7 +153,15 @@ export class NewsletterService implements NewsletterJobWorker {
         );
 
         transaction.afterCommit(async () => {
-          await this.emailProvider.sendEmail(emailPayload);
+          // The subscriber is already persisted; a delivery failure (e.g. the
+          // email provider being unreachable) must not fail the request.
+          try {
+            await this.emailProvider.sendEmail(emailPayload);
+          } catch (error: unknown) {
+            console.error(
+              `Failed to send verification email to ${subscriber.email}: ${getErrorMessage(error)}`,
+            );
+          }
         });
 
         return toSubscriberResponse(subscriber);
@@ -192,6 +200,15 @@ export class NewsletterService implements NewsletterJobWorker {
     }
 
     return toSubscriberResponse(await this.subscribers.save(subscriber));
+  }
+
+  async getByUnsubscribeToken(token: string): Promise<SubscriberResponse> {
+    const subscriber = await this.subscribers.findByUnsubscribeToken(token);
+    if (!subscriber) {
+      throw new NotFoundError("Unsubscribe token not found.");
+    }
+
+    return toSubscriberResponse(subscriber);
   }
 
   async unsubscribe(token: string): Promise<SubscriberResponse> {

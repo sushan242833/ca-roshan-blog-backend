@@ -65,6 +65,7 @@ export const postSchemas: SchemaCollection = {
       "metaDescription",
       "pdfUrl",
       "pdfLabel",
+      "showFeaturedImage",
       "publishedAt",
       "createdAt",
       "updatedAt",
@@ -133,6 +134,12 @@ export const postSchemas: SchemaCollection = {
         description: "Optional custom link text for the PDF callout.",
         example: "Read the full content (PDF)",
       },
+      showFeaturedImage: {
+        type: "boolean",
+        description:
+          "Whether the featured image is shown at the top of the blog detail page.",
+        example: true,
+      },
       publishedAt: {
         type: "string",
         format: "date-time",
@@ -198,6 +205,7 @@ export const postSchemas: SchemaCollection = {
       metaDescription: "Design and operate reliable Express APIs with TypeScript.",
       pdfUrl: "http://localhost:4000/uploads/full-report.pdf",
       pdfLabel: "Read the full content (PDF)",
+      showFeaturedImage: true,
       publishedAt: "2026-06-22T08:30:00.000Z",
       createdAt: "2026-06-22T08:15:30.000Z",
       updatedAt: "2026-06-22T08:30:00.000Z",
@@ -277,6 +285,12 @@ export const postSchemas: SchemaCollection = {
         maxLength: 255,
         description: "Optional custom link text. Send null to clear.",
         example: "Read the full content (PDF)",
+      },
+      showFeaturedImage: {
+        type: "boolean",
+        description:
+          "Whether the featured image is shown at the top of the blog detail page. Defaults to true.",
+        example: true,
       },
       status: {
         $ref: "#/components/schemas/PostStatus",
@@ -361,6 +375,12 @@ export const postSchemas: SchemaCollection = {
         maxLength: 255,
         description: "Optional custom link text. Send null to clear.",
         example: "Read the full content (PDF)",
+      },
+      showFeaturedImage: {
+        type: "boolean",
+        description:
+          "Whether the featured image is shown at the top of the blog detail page.",
+        example: false,
       },
       status: {
         $ref: "#/components/schemas/PostStatus",

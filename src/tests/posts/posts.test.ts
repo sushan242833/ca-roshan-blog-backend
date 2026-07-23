@@ -43,6 +43,14 @@ interface PostPdfResponseBody {
   };
 }
 
+interface PostShowFeaturedImageResponseBody {
+  success: boolean;
+  data: {
+    id: string;
+    showFeaturedImage: boolean;
+  };
+}
+
 describe("posts", () => {
   beforeEach(async () => {
     await setupIntegrationTest();
@@ -220,5 +228,62 @@ describe("posts", () => {
 
     assert.equal(updatedBody.data.pdfUrl, null);
     assert.equal(updatedBody.data.pdfLabel, null);
+  });
+
+  // showFeaturedImage defaults to true so existing posts keep showing the hero.
+  it("defaults showFeaturedImage to true when not provided", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+
+    const response = await createTestRequest()
+      .post("/api/v1/posts")
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .send({ title: "Default Hero", content: "<p>Body.</p>" })
+      .expect(201);
+    const body = response.body as PostShowFeaturedImageResponseBody;
+
+    assert.equal(body.data.showFeaturedImage, true);
+  });
+
+  // The admin can opt out per post, and the flag round-trips through update.
+  it("stores showFeaturedImage=false and toggles it back on update", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+
+    const created = await createTestRequest()
+      .post("/api/v1/posts")
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .send({
+        title: "Hidden Hero",
+        content: "<p>Body.</p>",
+        showFeaturedImage: false,
+      })
+      .expect(201);
+    const createdBody = created.body as PostShowFeaturedImageResponseBody;
+    assert.equal(createdBody.data.showFeaturedImage, false);
+
+    const updated = await createTestRequest()
+      .patch(`/api/v1/posts/${createdBody.data.id}`)
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .send({ showFeaturedImage: true })
+      .expect(200);
+    const updatedBody = updated.body as PostShowFeaturedImageResponseBody;
+
+    assert.equal(updatedBody.data.showFeaturedImage, true);
+  });
+
+  it("rejects a non-boolean showFeaturedImage", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+
+    await createTestRequest()
+      .post("/api/v1/posts")
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .send({
+        title: "Bad Flag",
+        content: "<p>Body.</p>",
+        showFeaturedImage: "yes",
+      })
+      .expect(400);
   });
 });

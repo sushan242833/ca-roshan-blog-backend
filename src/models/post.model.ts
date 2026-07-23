@@ -41,6 +41,7 @@ export interface PostAttributes {
   metaDescription?: string | null;
   pdfUrl?: string | null;
   pdfLabel?: string | null;
+  showFeaturedImage: boolean;
   status: PostStatus;
   featured: boolean;
   readingTime: number;
@@ -62,6 +63,7 @@ export type PostCreationAttributes = Optional<
   | "metaDescription"
   | "pdfUrl"
   | "pdfLabel"
+  | "showFeaturedImage"
   | "status"
   | "featured"
   | "readingTime"
@@ -122,6 +124,11 @@ export class Post extends Model<PostAttributes, PostCreationAttributes> {
   @AllowNull(true)
   @Column({ type: DataType.STRING(255), field: "pdf_label" })
   pdfLabel?: string | null;
+
+  @AllowNull(false)
+  @Default(true)
+  @Column({ type: DataType.BOOLEAN, field: "show_featured_image" })
+  showFeaturedImage!: boolean;
 
   @AllowNull(false)
   @Default(PostStatus.DRAFT)
