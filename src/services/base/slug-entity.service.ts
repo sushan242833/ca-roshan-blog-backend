@@ -12,11 +12,13 @@ export interface SlugEntityAttributes {
 export interface SlugEntityCreateDto {
   name: string;
   slug?: string;
+  description?: string | null;
 }
 
 export interface SlugEntityUpdateDto {
   name?: string;
   slug?: string;
+  description?: string | null;
 }
 
 /**
@@ -56,7 +58,15 @@ export class SlugEntityService<TModel extends Model & SlugEntityAttributes> {
       if (existing)
         throw new ConflictError(`${this.entityName} slug already exists.`);
       const entity = await this.model.create(
-        { name: dto.name, slug } as any,
+        {
+          name: dto.name,
+          slug,
+          // Only pass description through when the caller supplied it, so
+          // entities without a description column (e.g. Tag) are unaffected.
+          ...(dto.description !== undefined
+            ? { description: dto.description }
+            : {}),
+        } as any,
         { transaction: t },
       );
       return entity;
@@ -68,6 +78,9 @@ export class SlugEntityService<TModel extends Model & SlugEntityAttributes> {
       const entity = await this.model.findByPk(id, { transaction: t });
       if (!entity) throw new NotFoundError(`${this.entityName} not found.`);
       if (dto.name) entity.name = dto.name;
+      if (dto.description !== undefined) {
+        (entity as any).description = dto.description;
+      }
       if (dto.slug) {
         const newSlug = slugify(dto.slug);
         const existing = await this.model.findOne({

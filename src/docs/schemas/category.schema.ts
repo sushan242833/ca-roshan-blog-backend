@@ -22,6 +22,11 @@ export const categorySchemas: SchemaCollection = {
         type: "string",
         example: "engineering",
       },
+      description: {
+        type: "string",
+        nullable: true,
+        example: "Guides and updates on software engineering practices.",
+      },
       createdAt: {
         type: "string",
         format: "date-time",
@@ -46,6 +51,11 @@ export const categorySchemas: SchemaCollection = {
         type: "string",
         example: "engineering",
       },
+      description: {
+        type: "string",
+        nullable: true,
+        example: "Guides and updates on software engineering practices.",
+      },
     },
   },
   UpdateCategoryRequest: {
@@ -59,6 +69,11 @@ export const categorySchemas: SchemaCollection = {
       slug: {
         type: "string",
         example: "software-engineering",
+      },
+      description: {
+        type: "string",
+        nullable: true,
+        example: "Guides and updates on software engineering practices.",
       },
     },
   },

@@ -19,13 +19,14 @@ export interface CategoryAttributes {
   id: string;
   name: string;
   slug: string;
+  description?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export type CategoryCreationAttributes = Optional<
   CategoryAttributes,
-  "id" | "createdAt" | "updatedAt"
+  "id" | "description" | "createdAt" | "updatedAt"
 >;
 
 @Table({ tableName: "categories", timestamps: true, underscored: true })
@@ -46,6 +47,10 @@ export class Category extends Model<
   @AllowNull(false)
   @Column({ type: DataType.STRING })
   slug!: string;
+
+  @AllowNull(true)
+  @Column({ type: DataType.TEXT })
+  description?: string | null;
 
   @CreatedAt
   @Column({ field: "created_at" })

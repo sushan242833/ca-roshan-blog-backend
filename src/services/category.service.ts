@@ -9,6 +9,7 @@ export interface CategoryWithCount {
   id: string;
   name: string;
   slug: string;
+  description: string | null;
   postCount: number;
   createdAt: Date;
   updatedAt: Date;
@@ -54,6 +55,7 @@ class CategoryService {
       id: cat.id,
       name: cat.name,
       slug: cat.slug,
+      description: cat.description ?? null,
       postCount: countMap.get(cat.id) ?? 0,
       createdAt: cat.createdAt,
       updatedAt: cat.updatedAt,
