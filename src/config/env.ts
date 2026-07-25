@@ -34,6 +34,8 @@ export interface Env {
   EMAIL_FROM: string;
   CONTACT_EMAIL: string;
   NEWSLETTER_EMAIL_RATE_LIMIT_PER_SECOND: number;
+  // Feature flags: "1"/"true" = on, "0"/unset = off (default off).
+  FEATURE_FLAG_CONTACT_PAGE: boolean;
   // Only used at seed time (npm run db:seed-admin), never at runtime.
   ADMIN_EMAIL?: string;
   ADMIN_PASSWORD?: string;
@@ -65,6 +67,14 @@ function getPositiveNumberEnv(name: string, fallback: string): number {
   }
 
   return value;
+}
+
+function getBooleanEnv(name: string, fallback: boolean): boolean {
+  const value = getOptionalEnv(name);
+  if (typeof value === "undefined") {
+    return fallback;
+  }
+  return value === "1" || value.toLowerCase() === "true";
 }
 
 const resolvedNodeEnv = getEnv("NODE_ENV", "development") as Env["NODE_ENV"];
@@ -135,6 +145,7 @@ const env: Env = {
     "NEWSLETTER_EMAIL_RATE_LIMIT_PER_SECOND",
     "2",
   ),
+  FEATURE_FLAG_CONTACT_PAGE: getBooleanEnv("FEATURE_FLAG_CONTACT_PAGE", false),
   ADMIN_EMAIL: getOptionalEnv("ADMIN_EMAIL"),
   ADMIN_PASSWORD: getOptionalEnv("ADMIN_PASSWORD"),
   ADMIN_NAME: getOptionalEnv("ADMIN_NAME"),

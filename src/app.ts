@@ -124,7 +124,11 @@ app.use("/api/v1/admin/subscribers", adminSubscriberRoutes);
 app.use("/api/v1/categories", categoryRoutes);
 app.use("/api/v1/tags", tagRoutes);
 app.use("/api/v1/media", mediaRoutes);
-app.use("/api/v1/contact", contactRoutes);
+// Gated behind a feature flag. Gating the mount (not the controller body) means
+// an unmounted route 404s, so no live endpoint emails the owner while off.
+if (env.FEATURE_FLAG_CONTACT_PAGE) {
+  app.use("/api/v1/contact", contactRoutes);
+}
 
 setupSwagger(app);
 app.use(errorMiddleware);
