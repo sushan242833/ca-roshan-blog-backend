@@ -146,6 +146,10 @@ export async function createPost(
     title,
     slug,
     content,
+    // Mirror the service: search_text is the HTML-stripped body, which feeds the
+    // generated search_vector (migration 022) so full-text search can find body
+    // terms in tests just as it does in production.
+    searchText: content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim(),
     excerpt: "This is test post content.",
     metaTitle: title,
     metaDescription: "This is test post content.",

@@ -36,6 +36,15 @@ export interface PostAttributes {
   slug: string;
   excerpt?: string | null;
   content: string;
+  // Plain-text projection of `content`, used only for searching — never
+  // returned to clients (see post-response.dto.ts).
+  searchText?: string | null;
+  // Generated, weighted tsvector (migration 022). Read-only: populated by the
+  // database, never written by the app, and never returned to clients. Named to
+  // match the column exactly so its SELECT alias equals "search_vector" — that
+  // keeps the same identifier valid in both the WHERE (inner subquery, real
+  // column) and the ORDER BY (outer paginated query, aliased column).
+  search_vector?: string | null;
   featuredImageId?: string | null;
   metaTitle?: string | null;
   metaDescription?: string | null;
@@ -58,6 +67,8 @@ export type PostCreationAttributes = Optional<
   PostAttributes,
   | "id"
   | "excerpt"
+  | "searchText"
+  | "search_vector"
   | "featuredImageId"
   | "metaTitle"
   | "metaDescription"
@@ -103,6 +114,16 @@ export class Post extends Model<PostAttributes, PostCreationAttributes> {
   @AllowNull(false)
   @Column({ type: DataType.TEXT })
   content!: string;
+
+  @AllowNull(true)
+  @Column({ type: DataType.TEXT, field: "search_text" })
+  searchText?: string | null;
+
+  // GENERATED ALWAYS column — Sequelize only reads it. Never include it in a
+  // create/update payload (Postgres rejects writes to a generated column).
+  @AllowNull(true)
+  @Column({ type: DataType.TSVECTOR, field: "search_vector" })
+  search_vector?: string | null;
 
   @ForeignKey(() => Media)
   @AllowNull(true)

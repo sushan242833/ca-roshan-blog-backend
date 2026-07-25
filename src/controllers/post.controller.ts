@@ -16,6 +16,7 @@ import {
 const DEFAULT_PUBLIC_LIMIT = 10;
 const DEFAULT_ADMIN_LIMIT = 20;
 const MAX_LIMIT = 100;
+const MAX_PAGE = 1000;
 
 type RequestQuery = Request<
   EmptyRequestParams,
@@ -46,7 +47,9 @@ function getPositiveIntegerQuery(
   max?: number,
 ): number {
   const rawValue = getQueryString(req.query[field]);
-  if (typeof rawValue === "undefined") {
+  // An empty or whitespace-only value (e.g. ?page= from a frontend that always
+  // emits the param) is treated as absent rather than Number("") === 0.
+  if (typeof rawValue === "undefined" || rawValue.trim() === "") {
     return fallback;
   }
 
@@ -80,6 +83,25 @@ function getBooleanQuery(
   throw new ValidationError([
     { field, message: `${field} must be true or false.` },
   ]);
+}
+
+function getPostStatusQuery(
+  req: { query: RequestQuery },
+): PostStatus | undefined {
+  const rawValue = getQueryString(req.query.status);
+  if (typeof rawValue === "undefined") {
+    return undefined;
+  }
+
+  // status maps to a Postgres ENUM; an unchecked cast lets a bad value reach
+  // the DB and surface as a 500. Validate here so it's a 400 instead.
+  if (!Object.values(PostStatus).includes(rawValue as PostStatus)) {
+    throw new ValidationError([
+      { field: "status", message: "status is not a valid post status." },
+    ]);
+  }
+
+  return rawValue as PostStatus;
 }
 
 function getAdminId(req: { user?: AuthenticatedAdmin }): string {
@@ -188,7 +210,7 @@ export async function listPublished(
 ) {
   try {
     const result = await postService.getPublished({
-      page: getPositiveIntegerQuery(req, "page", 1),
+      page: getPositiveIntegerQuery(req, "page", 1, MAX_PAGE),
       limit: getPositiveIntegerQuery(req, "limit", DEFAULT_PUBLIC_LIMIT, MAX_LIMIT),
       search: getSearchQuery(req),
       category: getQueryString(req.query.category),
@@ -237,10 +259,10 @@ export async function adminList(
 ) {
   try {
     const result = await postService.adminList({
-      page: getPositiveIntegerQuery(req, "page", 1),
+      page: getPositiveIntegerQuery(req, "page", 1, MAX_PAGE),
       limit: getPositiveIntegerQuery(req, "limit", DEFAULT_ADMIN_LIMIT, MAX_LIMIT),
       search: getSearchQuery(req),
-      status: getQueryString(req.query.status) as PostStatus | undefined,
+      status: getPostStatusQuery(req),
       includeDeleted: getBooleanQuery(req, "includeDeleted") ?? false,
     });
     return res.json({ success: true, data: result });

@@ -3,6 +3,7 @@ import {
   Includeable,
   Op,
   Order,
+  OrderItem,
   Transaction,
   WhereOptions,
 } from "sequelize";
@@ -125,24 +126,84 @@ function taxonomyFilterConditions(
   return conditions;
 }
 
-function buildSearchWhere(search?: string): WhereOptions<PostAttributes> | null {
-  const trimmedSearch = search?.trim();
-  if (!trimmedSearch) {
+const MAX_SEARCH_LENGTH = 100;
+const MIN_SEARCH_LENGTH = 2;
+const MAX_SEARCH_TOKENS = 6;
+
+// Text search configuration — MUST match the generated column in migration 022.
+const SEARCH_CONFIG = "english";
+
+// Input hygiene retained from the ILIKE era. tsquery no longer treats %, _ or \
+// as special, but neutralising them one-for-one keeps the term predictable and
+// costs nothing for ordinary word queries.
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
+// Normalises a raw search term into tokens, or null when the search should be
+// treated as absent. Shared by the public (listPublished) and admin (adminList)
+// paths so the rules stay identical: trim, cap at 100 chars, ignore terms under
+// 2 chars, and keep at most 6 whitespace-separated tokens so a long query can't
+// build an unbounded predicate.
+function normalizeSearchTokens(search?: string): string[] | null {
+  const trimmed = search?.trim().slice(0, MAX_SEARCH_LENGTH);
+  if (!trimmed || trimmed.length < MIN_SEARCH_LENGTH) {
     return null;
   }
 
-  const pattern = `%${trimmedSearch}%`;
-  return {
-    [Op.or]: [
-      { title: { [Op.iLike]: pattern } },
-      { excerpt: { [Op.iLike]: pattern } },
-      // Content is stored as HTML, so a term can technically match inside a
-      // tag or attribute rather than visible text. That's an accepted
-      // tradeoff for a simple ILIKE search at this project's scale — a
-      // full-text (tsvector) solution would be unwarranted complexity here.
-      { content: { [Op.iLike]: pattern } },
-    ],
-  };
+  const tokens = trimmed.split(/\s+/).filter(Boolean).slice(0, MAX_SEARCH_TOKENS);
+  return tokens.length > 0 ? tokens : null;
+}
+
+// Builds the shared websearch_to_tsquery(...) SQL expression, or null when there
+// is no usable term. websearch_to_tsquery (not to_tsquery) accepts arbitrary
+// user input — stray quotes, unbalanced quotes, bare boolean operators —
+// without raising a syntax error. The term is passed through sequelize.escape,
+// never string-concatenated.
+function buildTsQuery(search?: string): string | null {
+  const tokens = normalizeSearchTokens(search);
+  if (!tokens) {
+    return null;
+  }
+
+  const term = tokens.map(escapeLikePattern).join(" ");
+  return `websearch_to_tsquery('${SEARCH_CONFIG}', ${sequelize.escape(term)})`;
+}
+
+// Full-text match against the weighted, GIN-indexed search_vector (migration
+// 022) — a bitmap index scan, replacing the previous unindexed ILIKE substring
+// scan entirely. Qualified with the "Post" alias so it is unambiguous inside
+// the paginated subquery.
+function buildSearchWhere(search?: string): WhereOptions<PostAttributes> | null {
+  const tsQuery = buildTsQuery(search);
+  if (!tsQuery) {
+    return null;
+  }
+
+  return sequelize.literal(
+    `"Post"."search_vector" @@ ${tsQuery}`,
+  ) as unknown as WhereOptions<PostAttributes>;
+}
+
+// Relevance ordering, focused on the topic (title):
+//   1. Posts whose TITLE matches the query rank above posts that only match in
+//      the excerpt or body — ts_rank_cd alone lets many body occurrences
+//      (weight C) outweigh a single title hit (weight A), which is not what a
+//      "search by topic name" should do.
+//   2. Within each tier, order by cover-density relevance over the full vector.
+// Returns [] when there is no usable search term.
+function searchRankOrders(search?: string): OrderItem[] {
+  const tsQuery = buildTsQuery(search);
+  if (!tsQuery) {
+    return [];
+  }
+
+  return [
+    sequelize.literal(
+      `(to_tsvector('${SEARCH_CONFIG}', "Post"."title") @@ ${tsQuery}) DESC`,
+    ),
+    sequelize.literal(`ts_rank_cd("Post"."search_vector", ${tsQuery}) DESC`),
+  ];
 }
 
 function combineWhere(
@@ -227,10 +288,18 @@ export class PostRepository {
 
     conditions.push(...taxonomyFilterConditions(filters));
 
+    // Relevance tier first (when searching), then newest-first. published_at is
+    // nullable and Postgres sorts NULLs first on DESC, so force NULLS LAST.
+    // ["id","DESC"] is a stable tiebreaker so posts sharing a timestamp aren't
+    // duplicated or skipped across page boundaries.
+    const order: Order = [
+      ...searchRankOrders(filters.search),
+      ["publishedAt", "DESC NULLS LAST"],
+      ["id", "DESC"],
+    ];
+
     return Post.findAndCountAll(
-      this.paginatedFindOptions(filters, combineWhere(conditions), [
-        ["publishedAt", "DESC"],
-      ]),
+      this.paginatedFindOptions(filters, combineWhere(conditions), order),
     );
   }
 
@@ -254,7 +323,9 @@ export class PostRepository {
       ...this.paginatedFindOptions(
         filters,
         conditions.length > 0 ? combineWhere(conditions) : {},
-        [["createdAt", "DESC"]],
+        // ["id","DESC"] is a stable tiebreaker so posts sharing a createdAt
+        // aren't duplicated or skipped across page boundaries.
+        [["createdAt", "DESC"], ["id", "DESC"]],
       ),
       paranoid: !filters.includeDeleted,
     });

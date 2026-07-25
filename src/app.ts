@@ -21,6 +21,12 @@ import { setupSwagger } from "@config/swagger";
 
 const app: Application = express();
 
+// Must be set before the rate limiters so req.ip resolves to the real client
+// IP (from X-Forwarded-For) rather than the proxy. A specific hop count is used
+// instead of `true`, which would let a client spoof X-Forwarded-For to bypass
+// the limit.
+app.set("trust proxy", env.TRUST_PROXY);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -44,11 +50,63 @@ if (env.NODE_ENV === "development") {
   app.use(morgan("dev"));
 }
 
-const limiter = rateLimit({
+// Rate limiters emit the project's standard error envelope (not the library's
+// default plain-text body) so the frontend's unwrapResponse() parses a 429
+// correctly instead of throwing "Invalid response from server."
+function rateLimitHandler(message: string) {
+  return (_req: Request, res: Response) => {
+    res.status(429).json({
+      success: false,
+      message,
+      error: { code: "RATE_LIMITED" },
+    });
+  };
+}
+
+// A non-empty `search`/`q` param marks a request as a search, which is far more
+// expensive (three ILIKE scans over an unindexed TEXT column) and gets the
+// tighter limiter below.
+function hasSearchQuery(req: Request): boolean {
+  const value = req.query.search ?? req.query.q;
+  if (Array.isArray(value)) {
+    return value.some((v) => typeof v === "string" && v.trim().length > 0);
+  }
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+const isTestEnv = env.NODE_ENV === "test";
+
+// General API traffic: generous enough for live navbar search + paginated
+// browsing. The test escape hatch raises the cap so integration tests don't
+// trip it.
+const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: env.NODE_ENV === "test" ? 1000 : 100,
+  max: isTestEnv ? 1_000_000 : 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler(
+    "Too many requests. Please slow down and try again shortly.",
+  ),
 });
-app.use(limiter);
+
+// Search is deliberately much tighter and applies only to search requests.
+const searchLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: isTestEnv ? 1_000_000 : 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => !hasSearchQuery(req),
+  handler: rateLimitHandler(
+    "Too many searches. Please wait a moment and try again.",
+  ),
+});
+
+// General limiter covers all API routes; the search limiter is layered on the
+// posts routes and only fires when a search term is present. /uploads is
+// registered above, so images are never rate limited.
+app.use("/api/v1", generalLimiter);
+app.use("/api/v1/posts", searchLimiter);
+
 const healthHandler = (
   _req: Request<EmptyRequestParams, unknown, EmptyRequestBody>,
   res: Response,

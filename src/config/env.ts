@@ -14,6 +14,10 @@ if (runtimeNodeEnv === "test") {
 export interface Env {
   PORT: number;
   NODE_ENV: "development" | "production" | "staging" | "test";
+  // Number of reverse-proxy hops in front of the app, used by
+  // app.set("trust proxy", ...). Kept as a specific hop count (not `true`) so a
+  // client cannot spoof X-Forwarded-For to escape rate limiting.
+  TRUST_PROXY: number;
   DB_HOST: string;
   DB_PORT: number;
   DB_NAME: string;
@@ -63,6 +67,24 @@ function getPositiveNumberEnv(name: string, fallback: string): number {
   return value;
 }
 
+const resolvedNodeEnv = getEnv("NODE_ENV", "development") as Env["NODE_ENV"];
+
+function getTrustProxyEnv(nodeEnv: Env["NODE_ENV"]): number {
+  const raw = getOptionalEnv("TRUST_PROXY");
+  if (typeof raw === "undefined") {
+    // Behind a proxy in production, req.ip must resolve to the client, not the
+    // proxy — otherwise every visitor shares one rate-limit bucket.
+    return nodeEnv === "production" ? 1 : 0;
+  }
+
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error("TRUST_PROXY must be a non-negative integer hop count");
+  }
+
+  return value;
+}
+
 const configuredPort = Number(getEnv("PORT", "4000"));
 const appBaseUrl = getEnv("APP_BASE_URL", `http://localhost:${configuredPort}`);
 const isTestEnvironment = runtimeNodeEnv === "test";
@@ -77,7 +99,8 @@ const testDatabaseName =
 
 const env: Env = {
   PORT: configuredPort,
-  NODE_ENV: getEnv("NODE_ENV", "development") as Env["NODE_ENV"],
+  NODE_ENV: resolvedNodeEnv,
+  TRUST_PROXY: getTrustProxyEnv(resolvedNodeEnv),
   DB_HOST: getEnv("DB_HOST", isTestEnvironment ? "localhost" : undefined),
   DB_PORT: Number(getEnv("DB_PORT", "5432")),
   DB_NAME: isTestEnvironment ? testDatabaseName : getEnv("DB_NAME"),

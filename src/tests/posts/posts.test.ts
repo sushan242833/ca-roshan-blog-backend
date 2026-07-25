@@ -143,6 +143,218 @@ describe("posts", () => {
     );
   });
 
+  // FTS: punctuation, wildcard characters and unbalanced quotes are arbitrary
+  // user input. websearch_to_tsquery accepts them without a syntax error, so the
+  // request must succeed (200), never 500 — the "%"/"_" literal-match assertions
+  // from the ILIKE era no longer apply under tsquery.
+  it("does not error on punctuation, wildcards or an unbalanced quote", async () => {
+    const admin = await createAdmin();
+    await createPost({
+      adminId: admin.admin.id,
+      status: PostStatus.PUBLISHED,
+      title: "A published article",
+      content: "<p>Body.</p>",
+    });
+
+    for (const term of ['50% off', 'file_name', '"unbalanced quote', 'a ) & | b']) {
+      const response = await createTestRequest()
+        .get(`/api/v1/posts?search=${encodeURIComponent(term)}`)
+        .expect(200);
+      const body = response.body as PostListResponseBody;
+      assert.equal(body.success, true, `"${term}" should return 200`);
+    }
+  });
+
+  // FTS: the 'english' configuration stems, so "taxes" matches a post that only
+  // ever says "tax" (the token lives in the body -> search_text -> search_vector).
+  it("matches a stemmed term (taxes -> tax)", async () => {
+    const admin = await createAdmin();
+    const post = await createPost({
+      adminId: admin.admin.id,
+      status: PostStatus.PUBLISHED,
+      title: "An unrelated heading",
+      content: "<p>The article discusses tax obligations in detail.</p>",
+    });
+
+    const response = await createTestRequest()
+      .get("/api/v1/posts?search=taxes")
+      .expect(200);
+    const body = response.body as PostListResponseBody;
+
+    assert.ok(
+      body.data.items.some((item) => item.id === post.id),
+      'searching "taxes" should match a post containing "tax"',
+    );
+  });
+
+  // FIX 2: multi-word queries AND the tokens, so a post containing both words
+  // separately matches, while a post with only one of them does not.
+  it("matches a two-word query against words appearing separately", async () => {
+    const admin = await createAdmin();
+    const bothPost = await createPost({
+      adminId: admin.admin.id,
+      status: PostStatus.PUBLISHED,
+      title: "Filing your annual income return before the tax deadline",
+      content: "<p>Body.</p>",
+    });
+    const onlyOnePost = await createPost({
+      adminId: admin.admin.id,
+      status: PostStatus.PUBLISHED,
+      title: "A note on income alone",
+      content: "<p>Body.</p>",
+    });
+
+    const response = await createTestRequest()
+      .get(`/api/v1/posts?search=${encodeURIComponent("income tax")}`)
+      .expect(200);
+    const body = response.body as PostListResponseBody;
+    const ids = body.data.items.map((item) => item.id);
+
+    assert.ok(ids.includes(bothPost.id), "post with both words should match");
+    assert.ok(
+      !ids.includes(onlyOnePost.id),
+      "post missing one token must NOT match (tokens are AND-ed)",
+    );
+  });
+
+  // FIX 4: a title match outranks a body-only match even when the body match
+  // was published more recently.
+  it("ranks a title match above a newer body-only match", async () => {
+    const admin = await createAdmin();
+    const token = "reconciliation";
+
+    const titlePost = await createPost({
+      adminId: admin.admin.id,
+      status: PostStatus.PUBLISHED,
+      title: `Quarterly ${token} explained`,
+      content: "<p>No matching term in this body.</p>",
+    });
+    await titlePost.update({ publishedAt: new Date("2020-01-01T00:00:00Z") });
+
+    const bodyPost = await createPost({
+      adminId: admin.admin.id,
+      status: PostStatus.PUBLISHED,
+      title: "An unrelated heading",
+      content: `<p>The word ${token} appears only here.</p>`,
+    });
+    await bodyPost.update({ publishedAt: new Date("2024-01-01T00:00:00Z") });
+
+    const response = await createTestRequest()
+      .get(`/api/v1/posts?search=${token}`)
+      .expect(200);
+    const body = response.body as PostListResponseBody;
+
+    assert.equal(
+      body.data.items[0]?.id,
+      titlePost.id,
+      "title match should rank first despite the body match being newer",
+    );
+  });
+
+  // FIX 5: with a stable id tiebreaker, paginating posts that share the same
+  // published_at returns every post exactly once — no dupes, no gaps.
+  it("paginates posts with identical published_at without dupes or gaps", async () => {
+    const admin = await createAdmin();
+    const sharedTimestamp = new Date("2023-06-15T12:00:00Z");
+    const created = [];
+    for (let i = 0; i < 3; i += 1) {
+      const post = await createPost({
+        adminId: admin.admin.id,
+        status: PostStatus.PUBLISHED,
+        title: `Same-timestamp post ${i}`,
+      });
+      await post.update({ publishedAt: sharedTimestamp });
+      created.push(post.id);
+    }
+
+    const seen = new Set<string>();
+    for (let page = 1; page <= 3; page += 1) {
+      const response = await createTestRequest()
+        .get(`/api/v1/posts?limit=1&page=${page}`)
+        .expect(200);
+      const body = response.body as PostListResponseBody;
+      assert.equal(body.data.items.length, 1, `page ${page} should hold one post`);
+      seen.add(body.data.items[0].id);
+    }
+
+    assert.equal(seen.size, 3, "each post should appear exactly once across pages");
+    created.forEach((id) =>
+      assert.ok(seen.has(id), `post ${id} should appear on some page`),
+    );
+  });
+
+  // FIX 3: a single-character search is below the minimum and is treated as
+  // absent, returning the unfiltered published list rather than throwing.
+  it("ignores a 1-character search and returns the unfiltered list", async () => {
+    const admin = await createAdmin();
+    const first = await createPost({
+      adminId: admin.admin.id,
+      status: PostStatus.PUBLISHED,
+      title: "First published article",
+    });
+    const second = await createPost({
+      adminId: admin.admin.id,
+      status: PostStatus.PUBLISHED,
+      title: "Second published article",
+    });
+
+    const response = await createTestRequest()
+      .get("/api/v1/posts?search=a")
+      .expect(200);
+    const body = response.body as PostListResponseBody;
+    const ids = body.data.items.map((item) => item.id);
+
+    assert.ok(ids.includes(first.id) && ids.includes(second.id),
+      "a 1-char search should not filter the list",
+    );
+  });
+
+  // FIX 3: an over-long search is truncated, not rejected — 200, never 500.
+  it("truncates a 500-character search instead of failing", async () => {
+    const admin = await createAdmin();
+    await createPost({
+      adminId: admin.admin.id,
+      status: PostStatus.PUBLISHED,
+      title: "Any published post",
+    });
+
+    const longTerm = "a".repeat(500);
+    const response = await createTestRequest()
+      .get(`/api/v1/posts?search=${longTerm}`)
+      .expect(200);
+    const body = response.body as PostListResponseBody;
+
+    assert.equal(body.success, true);
+  });
+
+  // FIX 7: an invalid status enum value is a 400, not a DB-level 500.
+  it("rejects an invalid status on admin list with 400", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+
+    await createTestRequest()
+      .get("/api/v1/posts/admin/list?status=NOTAREALSTATUS")
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .expect(400);
+  });
+
+  // FIX 8: empty numeric params are treated as absent, falling back to defaults.
+  it("accepts empty page and limit params using defaults", async () => {
+    const admin = await createAdmin();
+    await createPost({
+      adminId: admin.admin.id,
+      status: PostStatus.PUBLISHED,
+      title: "A published post",
+    });
+
+    const response = await createTestRequest()
+      .get("/api/v1/posts?page=&limit=")
+      .expect(200);
+    const body = response.body as PostListResponseBody;
+
+    assert.equal(body.success, true);
+  });
+
   // Full content PDF: create accepts pdfUrl + pdfLabel and echoes them back.
   it("creates a post with a full-content PDF url and label", async () => {
     const admin = await createAdmin();

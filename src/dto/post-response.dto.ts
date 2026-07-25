@@ -82,6 +82,9 @@ function toFeaturedImageResponse(post: Post): FeaturedImageResponse | null {
   };
 }
 
+// Explicit allowlist mapping — fields are copied one by one, never spread from
+// the model. In particular `searchText` (the internal plain-text search
+// projection) is deliberately omitted and must never be added here.
 export function toPostSummaryResponse(post: Post): PostSummaryResponse {
   return {
     id: post.id,

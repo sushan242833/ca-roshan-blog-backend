@@ -83,8 +83,9 @@ function normalizeExcerpt(value: string | null | undefined): string | null {
 }
 
 function calculateReadingTime(content: string): number {
-  const words = content
-    .trim()
+  // content is HTML — strip tags first, otherwise every tag counts as a "word"
+  // and reading time is inflated.
+  const words = stripHtml(content)
     .split(/\s+/)
     .filter((word) => word.length > 0);
 
@@ -209,6 +210,7 @@ export class PostService {
         slug,
         excerpt,
         content,
+        searchText: stripHtml(content),
         featuredImageId: dto.featuredImageId ?? null,
         categoryId: dto.categoryId ?? null,
         metaTitle,
@@ -268,6 +270,7 @@ export class PostService {
       if (typeof dto.content !== "undefined") {
         post.content = normalizeRequiredString(dto.content, "content");
         post.readingTime = calculateReadingTime(post.content);
+        post.searchText = stripHtml(post.content);
 
         if (!post.excerpt && typeof dto.excerpt === "undefined") {
           post.excerpt = createExcerpt(post.content);
