@@ -52,8 +52,34 @@ function normalizeOptionalString(value: string | null | undefined): string | nul
   return normalized || null;
 }
 
+// Content is stored as HTML, so strip tags and decode the common entities
+// before building an excerpt — otherwise the auto-generated excerpt leaks
+// raw markup like "<p><strong>…".
+function stripHtml(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function createExcerpt(content: string): string {
-  return content.trim().replace(/\s+/g, " ").slice(0, MAX_META_DESCRIPTION_LENGTH);
+  return stripHtml(content).slice(0, MAX_META_DESCRIPTION_LENGTH);
+}
+
+// Excerpts are always plain text (rendered as such on cards), so strip any
+// HTML a caller sends and collapse whitespace. Returns null when empty.
+function normalizeExcerpt(value: string | null | undefined): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  return stripHtml(value) || null;
 }
 
 function calculateReadingTime(content: string): number {
@@ -158,7 +184,7 @@ export class PostService {
     return this.repository.transaction(async (transaction) => {
       const title = normalizeRequiredString(dto.title, "title");
       const content = normalizeRequiredString(dto.content, "content");
-      const excerpt = normalizeOptionalString(dto.excerpt) ?? createExcerpt(content);
+      const excerpt = normalizeExcerpt(dto.excerpt) ?? createExcerpt(content);
       const metaTitle = normalizeOptionalString(dto.metaTitle) ?? title;
       const metaDescription =
         normalizeOptionalString(dto.metaDescription) ?? excerpt;
@@ -249,7 +275,7 @@ export class PostService {
       }
 
       if (typeof dto.excerpt !== "undefined") {
-        post.excerpt = normalizeOptionalString(dto.excerpt);
+        post.excerpt = normalizeExcerpt(dto.excerpt);
       }
 
       if (typeof dto.featuredImageId !== "undefined") {

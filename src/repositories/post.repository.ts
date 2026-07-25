@@ -50,9 +50,11 @@ export interface FindPostOptions {
   withAssociations?: boolean;
 }
 
-function postAssociations(
-  filters?: Pick<PostListFilters, "category" | "tag">,
-): Includeable[] {
+// Associations are always loaded UNFILTERED so every post carries its full set
+// of categories/tags. Filtering a listing by category/tag is done at the post
+// level (see taxonomyFilterConditions) so it never strips the other taxonomies
+// off the returned rows.
+function postAssociations(): Includeable[] {
   return [
     {
       model: Media,
@@ -77,17 +79,50 @@ function postAssociations(
       as: "categories",
       attributes: ["id", "name", "slug"],
       through: { attributes: [] },
-      required: Boolean(filters?.category),
-      where: filters?.category ? { slug: filters.category } : undefined,
+      required: false,
     },
     {
       model: Tag,
       attributes: ["id", "name", "slug"],
       through: { attributes: [] },
-      required: Boolean(filters?.tag),
-      where: filters?.tag ? { slug: filters.tag } : undefined,
+      required: false,
     },
   ];
+}
+
+// Restricts a listing to posts linked to a given category/tag slug via the
+// join tables, using a subquery so the loaded `categories`/`tags` arrays stay
+// complete (an include-level `where` would prune them to just the match).
+function taxonomyFilterConditions(
+  filters: Pick<PostListFilters, "category" | "tag">,
+): WhereOptions<PostAttributes>[] {
+  const conditions: WhereOptions<PostAttributes>[] = [];
+
+  if (filters.category) {
+    conditions.push({
+      id: {
+        [Op.in]: sequelize.literal(
+          `(SELECT pc.post_id FROM post_categories pc ` +
+            `INNER JOIN categories c ON c.id = pc.category_id ` +
+            `WHERE c.slug = ${sequelize.escape(filters.category)})`,
+        ),
+      },
+    });
+  }
+
+  if (filters.tag) {
+    conditions.push({
+      id: {
+        [Op.in]: sequelize.literal(
+          `(SELECT pt.post_id FROM post_tags pt ` +
+            `INNER JOIN tags t ON t.id = pt.tag_id ` +
+            `WHERE t.slug = ${sequelize.escape(filters.tag)})`,
+        ),
+      },
+    });
+  }
+
+  return conditions;
 }
 
 function buildSearchWhere(search?: string): WhereOptions<PostAttributes> | null {
@@ -189,6 +224,8 @@ export class PostRepository {
     if (searchWhere) {
       conditions.push(searchWhere);
     }
+
+    conditions.push(...taxonomyFilterConditions(filters));
 
     return Post.findAndCountAll(
       this.paginatedFindOptions(filters, combineWhere(conditions), [
@@ -312,7 +349,7 @@ export class PostRepository {
       offset: (filters.page - 1) * filters.limit,
       limit: filters.limit,
       order,
-      include: postAssociations(filters),
+      include: postAssociations(),
       distinct: true,
     };
   }
