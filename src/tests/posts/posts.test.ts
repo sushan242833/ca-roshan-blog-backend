@@ -143,10 +143,9 @@ describe("posts", () => {
     );
   });
 
-  // FTS: punctuation, wildcard characters and unbalanced quotes are arbitrary
-  // user input. websearch_to_tsquery accepts them without a syntax error, so the
-  // request must succeed (200), never 500 — the "%"/"_" literal-match assertions
-  // from the ILIKE era no longer apply under tsquery.
+  // Punctuation, wildcard characters and unbalanced quotes are arbitrary user
+  // input. escapeRegex neutralises every regex metacharacter, so the request
+  // must succeed (200), never 500.
   it("does not error on punctuation, wildcards or an unbalanced quote", async () => {
     const admin = await createAdmin();
     await createPost({
@@ -165,26 +164,65 @@ describe("posts", () => {
     }
   });
 
-  // FTS: the 'english' configuration stems, so "taxes" matches a post that only
-  // ever says "tax" (the token lives in the body -> search_text -> search_vector).
-  it("matches a stemmed term (taxes -> tax)", async () => {
+  // Word-start prefix matching: "test" returns both the exact title "Test" and
+  // the prefix title "test10", with the exact whole-word match ranked first.
+  it("prefix-matches a title and ranks the exact word first", async () => {
+    const admin = await createAdmin();
+    const exact = await createPost({
+      adminId: admin.admin.id,
+      status: PostStatus.PUBLISHED,
+      title: "Test",
+      content: "<p>Body.</p>",
+    });
+    const prefixed = await createPost({
+      adminId: admin.admin.id,
+      status: PostStatus.PUBLISHED,
+      title: "test10",
+      content: "<p>Body.</p>",
+    });
+
+    const response = await createTestRequest()
+      .get("/api/v1/posts?search=test")
+      .expect(200);
+    const items = (response.body as PostListResponseBody).data.items;
+    const ids = items.map((item) => item.id);
+
+    assert.ok(ids.includes(exact.id), '"test" should return "Test"');
+    assert.ok(ids.includes(prefixed.id), '"test" should return "test10"');
+    assert.ok(
+      ids.indexOf(exact.id) < ids.indexOf(prefixed.id),
+      'exact word "Test" must rank before prefix "test10"',
+    );
+
+    // A more specific prefix narrows to only the longer word.
+    const narrowed = await createTestRequest()
+      .get("/api/v1/posts?search=test1")
+      .expect(200);
+    const narrowedIds = (narrowed.body as PostListResponseBody).data.items.map(
+      (i) => i.id,
+    );
+    assert.ok(narrowedIds.includes(prefixed.id), '"test1" should return "test10"');
+    assert.ok(!narrowedIds.includes(exact.id), '"test1" must NOT return "Test"');
+  });
+
+  // The prefix anchors the START of a word only: "est" is an infix of "test",
+  // so it must NOT match, and neither must an unrelated word like "latest".
+  it("anchors the word start (est / latest do not match test)", async () => {
     const admin = await createAdmin();
     const post = await createPost({
       adminId: admin.admin.id,
       status: PostStatus.PUBLISHED,
-      title: "An unrelated heading",
-      content: "<p>The article discusses tax obligations in detail.</p>",
+      title: "Test",
+      content: "<p>A short body.</p>",
     });
 
-    const response = await createTestRequest()
-      .get("/api/v1/posts?search=taxes")
-      .expect(200);
-    const body = response.body as PostListResponseBody;
-
-    assert.ok(
-      body.data.items.some((item) => item.id === post.id),
-      'searching "taxes" should match a post containing "tax"',
-    );
+    for (const term of ["est", "latest"]) {
+      const response = await createTestRequest()
+        .get(`/api/v1/posts?search=${term}`)
+        .expect(200);
+      const ids = (response.body as PostListResponseBody).data.items.map((i) => i.id);
+      assert.ok(!ids.includes(post.id), `"${term}" must NOT match the word "test"`);
+    }
   });
 
   // FIX 2: multi-word queries AND the tokens, so a post containing both words

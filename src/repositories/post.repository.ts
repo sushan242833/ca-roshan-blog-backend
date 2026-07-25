@@ -130,14 +130,30 @@ const MAX_SEARCH_LENGTH = 100;
 const MIN_SEARCH_LENGTH = 2;
 const MAX_SEARCH_TOKENS = 6;
 
-// Text search configuration — MUST match the generated column in migration 022.
-const SEARCH_CONFIG = "english";
+// Escapes POSIX ERE metacharacters so a raw token/query is matched as a literal
+// string, never as a pattern. The word-boundary anchors (\m, \M) are added
+// AROUND the escaped output, so they stay live regex operators.
+export function escapeRegex(value: string): string {
+  return value.replace(/[.\\+*?()[\]{}^$|]/g, "\\$&");
+}
 
-// Input hygiene retained from the ILIKE era. tsquery no longer treats %, _ or \
-// as special, but neutralising them one-for-one keeps the term predictable and
-// costs nothing for ordinary word queries.
-function escapeLikePattern(value: string): string {
-  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+// WHERE clause + ranking tiers 2/3: anchor the START of a word only. There is
+// deliberately NO trailing \M and no $ — a prefix like "test1" must still match
+// the word "test10", which is the whole point of the incremental navbar search.
+export function buildPrefixPattern(token: string): string {
+  return `\\m${escapeRegex(token)}`;
+}
+
+// Ranking tier 1 only: a complete word — start (\m) AND end (\M) anchored. \M
+// appears ONLY in the ORDER BY tiers below, never in the WHERE clause.
+export function buildExactWordPattern(token: string): string {
+  return `\\m${escapeRegex(token)}\\M`;
+}
+
+// Ranking tier 0 only: the whole query as one complete word phrase. Interior
+// whitespace becomes \s+ so any run of spaces between the words still matches.
+export function buildPhrasePattern(query: string): string {
+  return `\\m${escapeRegex(query).replace(/\s+/g, "\\s+")}\\M`;
 }
 
 // Normalises a raw search term into tokens, or null when the search should be
@@ -145,7 +161,7 @@ function escapeLikePattern(value: string): string {
 // paths so the rules stay identical: trim, cap at 100 chars, ignore terms under
 // 2 chars, and keep at most 6 whitespace-separated tokens so a long query can't
 // build an unbounded predicate.
-function normalizeSearchTokens(search?: string): string[] | null {
+export function normalizeSearchTokens(search?: string): string[] | null {
   const trimmed = search?.trim().slice(0, MAX_SEARCH_LENGTH);
   if (!trimmed || trimmed.length < MIN_SEARCH_LENGTH) {
     return null;
@@ -155,54 +171,78 @@ function normalizeSearchTokens(search?: string): string[] | null {
   return tokens.length > 0 ? tokens : null;
 }
 
-// Builds the shared websearch_to_tsquery(...) SQL expression, or null when there
-// is no usable term. websearch_to_tsquery (not to_tsquery) accepts arbitrary
-// user input — stray quotes, unbalanced quotes, bare boolean operators —
-// without raising a syntax error. The term is passed through sequelize.escape,
-// never string-concatenated.
-function buildTsQuery(search?: string): string | null {
+// The searchable text columns, qualified with the "Post" alias so they resolve
+// inside the paginated subquery's WHERE. search_text is the HTML-stripped body
+// (migration 021); when it is NULL (an incomplete backfill) we fall back to the
+// raw content so search still works everywhere.
+function tokenMatchesAnyColumn(escapedPattern: string): string {
+  return (
+    `("Post"."title" ~* ${escapedPattern} ` +
+    `OR coalesce("Post"."excerpt", '') ~* ${escapedPattern} ` +
+    `OR coalesce("Post"."search_text", '') ~* ${escapedPattern} ` +
+    `OR ("Post"."search_text" IS NULL AND "Post"."content" ~* ${escapedPattern}))`
+  );
+}
+
+// Word-start prefix match: every token must prefix-match a word in at least one
+// searchable column (case-insensitive ~*). No end anchor, so typing "test1"
+// still matches "test10".
+function buildSearchWhere(search?: string): WhereOptions<PostAttributes> | null {
   const tokens = normalizeSearchTokens(search);
   if (!tokens) {
     return null;
   }
 
-  const term = tokens.map(escapeLikePattern).join(" ");
-  return `websearch_to_tsquery('${SEARCH_CONFIG}', ${sequelize.escape(term)})`;
+  const clause = tokens
+    .map((token) => tokenMatchesAnyColumn(sequelize.escape(buildPrefixPattern(token))))
+    .join(" AND ");
+
+  return sequelize.literal(clause) as unknown as WhereOptions<PostAttributes>;
 }
 
-// Full-text match against the weighted, GIN-indexed search_vector (migration
-// 022) — a bitmap index scan, replacing the previous unindexed ILIKE substring
-// scan entirely. Qualified with the "Post" alias so it is unambiguous inside
-// the paginated subquery.
-function buildSearchWhere(search?: string): WhereOptions<PostAttributes> | null {
-  const tsQuery = buildTsQuery(search);
-  if (!tsQuery) {
-    return null;
-  }
-
-  return sequelize.literal(
-    `"Post"."search_vector" @@ ${tsQuery}`,
-  ) as unknown as WhereOptions<PostAttributes>;
+// Joins per-token conditions against one column expression with AND.
+function everyTokenMatches(
+  columnExpr: string,
+  tokens: string[],
+  patternFor: (token: string) => string,
+): string {
+  return tokens
+    .map((token) => `${columnExpr} ~* ${sequelize.escape(patternFor(token))}`)
+    .join(" AND ");
 }
 
-// Relevance ordering, focused on the topic (title):
-//   1. Posts whose TITLE matches the query rank above posts that only match in
-//      the excerpt or body — ts_rank_cd alone lets many body occurrences
-//      (weight C) outweigh a single title hit (weight A), which is not what a
-//      "search by topic name" should do.
-//   2. Within each tier, order by cover-density relevance over the full vector.
-// Returns [] when there is no usable search term.
+// Five-tier relevance ordering (lowest tier sorts first). Prefix matching in the
+// WHERE means "test" returns both "Test" and "test10"; the tiers keep exact
+// whole-word title matches on top. \M appears only here, never in the WHERE.
+//   0: the whole query matches the title as a complete word phrase
+//   1: every token is a complete word in the title
+//   2: every token prefix-matches a word in the title
+//   3: every token prefix-matches a word in the excerpt
+//   4: body-only match
 function searchRankOrders(search?: string): OrderItem[] {
-  const tsQuery = buildTsQuery(search);
-  if (!tsQuery) {
+  const tokens = normalizeSearchTokens(search);
+  if (!tokens) {
     return [];
   }
 
+  const phrase = sequelize.escape(buildPhrasePattern(tokens.join(" ")));
+  const titleExact = everyTokenMatches(`"Post"."title"`, tokens, buildExactWordPattern);
+  const titlePrefix = everyTokenMatches(`"Post"."title"`, tokens, buildPrefixPattern);
+  const excerptPrefix = everyTokenMatches(
+    `coalesce("Post"."excerpt", '')`,
+    tokens,
+    buildPrefixPattern,
+  );
+
   return [
     sequelize.literal(
-      `(to_tsvector('${SEARCH_CONFIG}', "Post"."title") @@ ${tsQuery}) DESC`,
+      `CASE ` +
+        `WHEN "Post"."title" ~* ${phrase} THEN 0 ` +
+        `WHEN ${titleExact} THEN 1 ` +
+        `WHEN ${titlePrefix} THEN 2 ` +
+        `WHEN ${excerptPrefix} THEN 3 ` +
+        `ELSE 4 END ASC`,
     ),
-    sequelize.literal(`ts_rank_cd("Post"."search_vector", ${tsQuery}) DESC`),
   ];
 }
 
