@@ -435,11 +435,15 @@ export class PostService {
     drafts: number;
     archived: number;
   }> {
+    // Exclude soft-deleted posts (the model is paranoid, so the default count
+    // already does). Passing paranoid:false would count deleted posts, making
+    // these stats disagree with the admin list — which hides soft-deleted rows —
+    // e.g. a "Published 14" badge over a list of only 11 live published posts.
     const [totalPosts, published, drafts, archived] = await Promise.all([
-      Post.count({ paranoid: false }),
-      Post.count({ where: { status: PostStatus.PUBLISHED }, paranoid: false }),
-      Post.count({ where: { status: PostStatus.DRAFT }, paranoid: false }),
-      Post.count({ where: { status: PostStatus.ARCHIVED }, paranoid: false }),
+      Post.count(),
+      Post.count({ where: { status: PostStatus.PUBLISHED } }),
+      Post.count({ where: { status: PostStatus.DRAFT } }),
+      Post.count({ where: { status: PostStatus.ARCHIVED } }),
     ]);
     return { totalPosts, published, drafts, archived };
   }
