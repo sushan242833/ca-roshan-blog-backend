@@ -323,6 +323,13 @@ export class NewsletterService implements NewsletterJobWorker {
       return;
     }
 
+    // Atomically claim before sending so a duplicated/concurrent job can't
+    // double-send: only the worker that flips PENDING -> SENT proceeds.
+    const claimed = await this.logs.claimForSending(log.id);
+    if (!claimed) {
+      return;
+    }
+
     try {
       await this.emailProvider.sendEmail(
         this.buildPostNewsletterEmailPayload(
@@ -333,7 +340,6 @@ export class NewsletterService implements NewsletterJobWorker {
           log.post.slug,
         ),
       );
-      await this.logs.markSent(log.id);
     } catch (error: unknown) {
       await this.logs.markFailed(log.id, getErrorMessage(error));
     }

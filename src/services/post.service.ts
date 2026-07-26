@@ -178,6 +178,22 @@ export class PostService {
     private readonly newsletters: NewsletterService = newsletterService,
   ) {}
 
+  // Dispatches a post's newsletter at most once. `newsletterSentAt` is the
+  // idempotency marker: set the first time it is sent, then checked here so a
+  // later unpublish/republish cycle never re-sends to subscribers.
+  private async dispatchNewsletterOnce(
+    post: Post,
+    shouldDispatch: boolean,
+    transaction: Transaction,
+  ): Promise<void> {
+    if (!shouldDispatch || post.newsletterSentAt) {
+      return;
+    }
+    await this.newsletters.schedulePostPublished(post.id, transaction);
+    post.newsletterSentAt = new Date();
+    await this.repository.save(post, transaction);
+  }
+
   async create(
     adminId: string,
     dto: CreatePostDto,
@@ -230,9 +246,11 @@ export class PostService {
       await this.repository.replaceCategories(post.id, categoryIds, transaction);
       await this.repository.replaceTags(post.id, tagIds, transaction);
 
-      if (post.status === PostStatus.PUBLISHED) {
-        await this.newsletters.schedulePostPublished(post.id, transaction);
-      }
+      await this.dispatchNewsletterOnce(
+        post,
+        post.status === PostStatus.PUBLISHED,
+        transaction,
+      );
 
       return toPostDetailResponse(
         await this.getPersistedPost(post.id, transaction),
@@ -342,12 +360,12 @@ export class PostService {
       }
 
       await this.repository.save(post, transaction);
-      if (
+      await this.dispatchNewsletterOnce(
+        post,
         previousStatus === PostStatus.DRAFT &&
-        post.status === PostStatus.PUBLISHED
-      ) {
-        await this.newsletters.schedulePostPublished(post.id, transaction);
-      }
+          post.status === PostStatus.PUBLISHED,
+        transaction,
+      );
 
       return toPostDetailResponse(
         await this.getPersistedPost(post.id, transaction),
@@ -532,12 +550,12 @@ export class PostService {
       const previousStatus = post.status;
       applyStatus(post, status);
       await this.repository.save(post, transaction);
-      if (
+      await this.dispatchNewsletterOnce(
+        post,
         previousStatus === PostStatus.DRAFT &&
-        post.status === PostStatus.PUBLISHED
-      ) {
-        await this.newsletters.schedulePostPublished(post.id, transaction);
-      }
+          post.status === PostStatus.PUBLISHED,
+        transaction,
+      );
 
       return toPostDetailResponse(
         await this.getPersistedPost(post.id, transaction),

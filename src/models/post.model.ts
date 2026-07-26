@@ -58,6 +58,9 @@ export interface PostAttributes {
   adminId: string;
   categoryId?: string | null;
   publishedAt?: Date | null;
+  // Set once, the first time this post's newsletter is dispatched, so it is
+  // never sent twice across publish/unpublish/republish cycles.
+  newsletterSentAt?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
   deletedAt?: Date | null;
@@ -81,6 +84,7 @@ export type PostCreationAttributes = Optional<
   | "viewCount"
   | "categoryId"
   | "publishedAt"
+  | "newsletterSentAt"
   | "createdAt"
   | "updatedAt"
   | "deletedAt"
@@ -193,6 +197,10 @@ export class Post extends Model<PostAttributes, PostCreationAttributes> {
   @AllowNull(true)
   @Column({ type: DataType.DATE, field: "published_at" })
   publishedAt?: Date | null;
+
+  @AllowNull(true)
+  @Column({ type: DataType.DATE, field: "newsletter_sent_at" })
+  newsletterSentAt?: Date | null;
 
   @CreatedAt
   @Column({ field: "created_at" })

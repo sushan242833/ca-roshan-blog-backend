@@ -29,15 +29,19 @@ export class NewsletterLogRepository {
     });
   }
 
-  async markSent(logId: string): Promise<void> {
-    await NewsletterLog.update(
+  // Atomically claims a delivery for sending: flips PENDING -> SENT in a single
+  // conditional UPDATE. Only one caller can win the row, so a re-enqueued or
+  // concurrently-processed job never double-sends. Returns true for the winner.
+  async claimForSending(logId: string): Promise<boolean> {
+    const [affected] = await NewsletterLog.update(
       {
         status: NewsletterLogStatus.SENT,
         sentAt: new Date(),
         errorMessage: null,
       },
-      { where: { id: logId } },
+      { where: { id: logId, status: NewsletterLogStatus.PENDING } },
     );
+    return affected > 0;
   }
 
   async markFailed(logId: string, errorMessage: string): Promise<void> {

@@ -26,7 +26,7 @@ const startServer = async () => {
         server = app.listen(env.PORT, () => {
           console.log(`Server listening on port ${env.PORT}`);
         });
-        break; // success
+        break;
       } catch (err: unknown) {
         if (
           typeof err === "object" &&
