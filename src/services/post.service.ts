@@ -461,7 +461,7 @@ export class PostService {
     const token = jwt.sign(
       { sub: postId, type: "preview" },
       env.JWT_SECRET,
-      { expiresIn: "1h" },
+      { expiresIn: "1h", algorithm: "HS256" },
     );
 
     return { token, expiresAt };
@@ -471,7 +471,9 @@ export class PostService {
     let payload: { sub: string; type: string };
 
     try {
-      payload = jwt.verify(token, env.JWT_SECRET) as {
+      payload = jwt.verify(token, env.JWT_SECRET, {
+        algorithms: ["HS256"],
+      }) as {
         sub: string;
         type: string;
       };

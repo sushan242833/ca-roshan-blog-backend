@@ -24,6 +24,8 @@ export const authMiddleware = async (
         .json({ success: false, message: "Invalid Authorization header" });
     const token = parts[1];
     const payload = verifyAccessToken(token);
+    if (payload.type !== "access")
+      return res.status(401).json({ success: false, message: "Invalid token" });
     const admin = await Admin.findByPk(payload.sub, {
       attributes: ["id", "email", "isActive"],
     });

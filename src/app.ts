@@ -101,11 +101,23 @@ const searchLimiter = rateLimit({
   ),
 });
 
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: isTestEnv ? 1_000_000 : 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  handler: rateLimitHandler(
+    "Too many login attempts. Please try again later.",
+  ),
+});
+
 // General limiter covers all API routes; the search limiter is layered on the
 // posts routes and only fires when a search term is present. /uploads is
 // registered above, so images are never rate limited.
 app.use("/api/v1", generalLimiter);
 app.use("/api/v1/posts", searchLimiter);
+app.use("/api/v1/auth/login", loginLimiter);
 
 const healthHandler = (
   _req: Request<EmptyRequestParams, unknown, EmptyRequestBody>,

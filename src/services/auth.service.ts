@@ -5,8 +5,16 @@ import {
   verifyRefreshToken,
 } from "@utils/jwt";
 import { hashValue, compareHash } from "@utils/bcrypt";
-import { ConflictError, NotFoundError } from "@errors/http-error";
+import {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from "@errors/http-error";
 import { AboutPageResponse, toAboutPageResponse } from "@dto/about-page.dto";
+
+const MIN_PASSWORD_LENGTH = 12;
+
+const dummyHashPromise = hashValue("timing-equalizer-dummy-password");
 
 interface Tokens {
   accessToken: string;
@@ -86,6 +94,15 @@ export class AuthService {
       );
     }
 
+    if (data.password.length < MIN_PASSWORD_LENGTH) {
+      throw new ValidationError([
+        {
+          field: "password",
+          message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+        },
+      ]);
+    }
+
     const passwordHash = await hashValue(data.password);
     await Admin.create({
       name: data.name,
@@ -100,7 +117,10 @@ export class AuthService {
     password: string,
   ): Promise<LoginResponse | null> {
     const admin = await Admin.findOne({ where: { email } });
-    if (!admin) return null;
+    if (!admin) {
+      await compareHash(password, await dummyHashPromise);
+      return null;
+    }
 
     const ok = await compareHash(password, admin.passwordHash);
     if (!ok) return null;
@@ -134,6 +154,7 @@ export class AuthService {
   public async refresh(token: string): Promise<Tokens | null> {
     try {
       const payload = verifyRefreshToken(token);
+      if (payload.type !== "refresh") return null;
       const adminId = payload.sub;
       const admin = await Admin.findByPk(adminId);
       if (!admin || !admin.refreshTokenHash) return null;

@@ -79,6 +79,31 @@ function getBooleanEnv(name: string, fallback: boolean): boolean {
 
 const resolvedNodeEnv = getEnv("NODE_ENV", "development") as Env["NODE_ENV"];
 
+const WEAK_SECRETS = new Set([
+  "your-super-secret-key",
+  "another-super-secret-key",
+  "test_jwt_secret",
+  "test_jwt_refresh_secret",
+  "changeme",
+  "secret",
+]);
+
+function getStrongSecret(name: string, nodeEnv: Env["NODE_ENV"]): string {
+  const isTest = nodeEnv === "test";
+  const value = getEnv(name, isTest ? `test_${name.toLowerCase()}` : undefined);
+
+  if (nodeEnv === "production" || nodeEnv === "staging") {
+    if (value.length < 32 || WEAK_SECRETS.has(value)) {
+      throw new Error(
+        `${name} must be a strong, random value of at least 32 characters. ` +
+          "Generate one with `openssl rand -base64 48`.",
+      );
+    }
+  }
+
+  return value;
+}
+
 function getTrustProxyEnv(nodeEnv: Env["NODE_ENV"]): number {
   const raw = getOptionalEnv("TRUST_PROXY");
   if (typeof raw === "undefined") {
@@ -119,14 +144,8 @@ const env: Env = {
     isTestEnvironment ? getEnv("USER", "postgres") : undefined,
   ),
   DB_PASSWORD: getEnv("DB_PASSWORD", isTestEnvironment ? "" : undefined),
-  JWT_SECRET: getEnv(
-    "JWT_SECRET",
-    isTestEnvironment ? "test_jwt_secret" : undefined,
-  ),
-  JWT_REFRESH_SECRET: getEnv(
-    "JWT_REFRESH_SECRET",
-    isTestEnvironment ? "test_jwt_refresh_secret" : undefined,
-  ),
+  JWT_SECRET: getStrongSecret("JWT_SECRET", resolvedNodeEnv),
+  JWT_REFRESH_SECRET: getStrongSecret("JWT_REFRESH_SECRET", resolvedNodeEnv),
   MEDIA_BASE_URL: getEnv(
     "MEDIA_BASE_URL",
     `http://localhost:${configuredPort}`,

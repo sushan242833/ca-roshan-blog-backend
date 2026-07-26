@@ -1,5 +1,9 @@
 import { after, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import jwt from "jsonwebtoken";
+import { env } from "@config/env";
+import authService from "@services/auth.service";
+import { ValidationError } from "@errors/http-error";
 import {
   createTestRequest,
   setupIntegrationTest,
@@ -40,5 +44,45 @@ describe("auth", () => {
     assert.equal(body.data.admin.email, admin.email);
     assert.equal(typeof body.data.accessToken, "string");
     assert.ok(body.data.accessToken.length > 0);
+  });
+
+  it("rejects a non-access token on a protected route", async () => {
+    const admin = await createAdmin();
+    const previewLikeToken = jwt.sign(
+      { sub: admin.admin.id, type: "preview" },
+      env.JWT_SECRET,
+      { expiresIn: "15m", algorithm: "HS256" },
+    );
+
+    await createTestRequest()
+      .get("/api/v1/auth/me")
+      .set("Authorization", `Bearer ${previewLikeToken}`)
+      .expect(401);
+  });
+
+  it("rejects a token signed with a foreign secret", async () => {
+    const admin = await createAdmin();
+    const forged = jwt.sign(
+      { sub: admin.admin.id, type: "access" },
+      "not-the-real-secret",
+      { expiresIn: "15m", algorithm: "HS256" },
+    );
+
+    await createTestRequest()
+      .get("/api/v1/auth/me")
+      .set("Authorization", `Bearer ${forged}`)
+      .expect(401);
+  });
+
+  it("rejects admin creation with a too-short password", async () => {
+    await assert.rejects(
+      () =>
+        authService.createAdmin({
+          name: "Shorty",
+          email: "shorty@example.test",
+          password: "short",
+        }),
+      ValidationError,
+    );
   });
 });
