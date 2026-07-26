@@ -10,7 +10,6 @@ import {
 } from "@dto/subscriber.dto";
 import { PaginatedResponse } from "@dto/pagination.dto";
 import {
-  ConflictError,
   GoneError,
   NotFoundError,
   ValidationError,
@@ -109,9 +108,9 @@ export class NewsletterService implements NewsletterJobWorker {
   }
 
   async subscribe(dto: CreateSubscriberDto): Promise<SubscriberResponse> {
+    const email = normalizeEmail(dto.email);
     try {
       return await this.subscribers.transaction(async (transaction) => {
-        const email = normalizeEmail(dto.email);
         const existing = await this.subscribers.findByEmail(email, {
           transaction,
           includeDeleted: true,
@@ -125,7 +124,10 @@ export class NewsletterService implements NewsletterJobWorker {
           !existing.deletedAt &&
           existing.status === SubscriberStatus.ACTIVE
         ) {
-          throw new ConflictError("This email is already subscribed and verified.");
+          // Already verified: do nothing and don't resend. The controller
+          // returns a generic response, so this is indistinguishable from a
+          // fresh subscribe (no account-enumeration signal).
+          return toSubscriberResponse(existing);
         }
 
         const subscriber = existing
@@ -168,7 +170,12 @@ export class NewsletterService implements NewsletterJobWorker {
       });
     } catch (error: unknown) {
       if (error instanceof UniqueConstraintError) {
-        throw new ConflictError("Email is already subscribed.");
+        // Concurrent subscribe for the same address won the insert race; treat
+        // as success rather than leaking existence via a 409.
+        const existing = await this.subscribers.findByEmail(email, {
+          includeDeleted: true,
+        });
+        if (existing) return toSubscriberResponse(existing);
       }
 
       throw error;

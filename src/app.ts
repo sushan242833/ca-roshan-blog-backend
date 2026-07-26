@@ -107,9 +107,7 @@ const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,
-  handler: rateLimitHandler(
-    "Too many login attempts. Please try again later.",
-  ),
+  handler: rateLimitHandler("Too many login attempts. Please try again later."),
 });
 
 // General limiter covers all API routes; the search limiter is layered on the

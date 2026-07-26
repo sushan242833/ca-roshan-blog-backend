@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as controller from "@controllers/subscriber.controller";
+import { emailLimiter } from "@middleware/rate-limit";
 import {
   validateCreateSubscriber,
   validateSubscriberToken,
@@ -14,6 +15,7 @@ import {
 const router = Router();
 router.post<EmptyRequestParams, unknown, SubscribeRequest>(
   "/",
+  emailLimiter,
   validateCreateSubscriber,
   controller.createSubscriber,
 );
