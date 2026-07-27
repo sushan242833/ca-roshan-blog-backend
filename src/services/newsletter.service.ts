@@ -9,11 +9,7 @@ import {
   toSubscriberResponse,
 } from "@dto/subscriber.dto";
 import { PaginatedResponse } from "@dto/pagination.dto";
-import {
-  GoneError,
-  NotFoundError,
-  ValidationError,
-} from "@errors/http-error";
+import { GoneError, NotFoundError, ValidationError } from "@errors/http-error";
 import { NewsletterLogStatus } from "@models/newsletter-log.model";
 import { PostStatus } from "@models/post.model";
 import { Subscriber, SubscriberStatus } from "@models/subscriber.model";
@@ -116,7 +112,9 @@ export class NewsletterService implements NewsletterJobWorker {
           includeDeleted: true,
         });
         const verificationToken = createToken();
-        const verificationTokenExpiresAt = new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS);
+        const verificationTokenExpiresAt = new Date(
+          Date.now() + VERIFICATION_TOKEN_TTL_MS,
+        );
         const unsubscribeToken = existing?.unsubscribeToken ?? createToken();
 
         if (
@@ -357,7 +355,9 @@ export class NewsletterService implements NewsletterJobWorker {
 
     subscriber.status = SubscriberStatus.PENDING;
     subscriber.verificationToken = verificationToken;
-    subscriber.verificationTokenExpiresAt = new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS);
+    subscriber.verificationTokenExpiresAt = new Date(
+      Date.now() + VERIFICATION_TOKEN_TTL_MS,
+    );
     subscriber.unsubscribeToken = unsubscribeToken;
     subscriber.verifiedAt = null;
 
@@ -393,7 +393,10 @@ export class NewsletterService implements NewsletterJobWorker {
       email,
       postTitle,
       postExcerpt,
-      postUrl: buildUrl(env.APP_BASE_URL, `/posts/${encodeURIComponent(postSlug)}`),
+      postUrl: buildUrl(
+        env.APP_BASE_URL,
+        `/blogs/${encodeURIComponent(postSlug)}`,
+      ),
       unsubscribeUrl: buildUrl(
         env.API_BASE_URL,
         `/api/v1/subscribers/unsubscribe/${encodeURIComponent(unsubscribeToken)}`,
