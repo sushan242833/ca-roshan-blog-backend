@@ -18,6 +18,15 @@ export interface Env {
   // app.set("trust proxy", ...). Kept as a specific hop count (not `true`) so a
   // client cannot spoof X-Forwarded-For to escape rate limiting.
   TRUST_PROXY: number;
+  // Single connection URL from a managed Postgres provider. When set it wins
+  // over the discrete DB_* fields below.
+  DATABASE_URL?: string;
+  DB_SSL_CA?: string;
+  // TLS to the database. Defaults to on whenever DATABASE_URL is set (every
+  // managed provider requires it) or in production/staging. Set DB_SSL=false
+  // only when pointing DATABASE_URL at a plaintext local Postgres.
+  DB_SSL: boolean;
+  DB_POOL_MAX: number;
   DB_HOST: string;
   DB_PORT: number;
   DB_NAME: string;
@@ -26,6 +35,13 @@ export interface Env {
   JWT_SECRET: string;
   JWT_REFRESH_SECRET: string;
   MEDIA_BASE_URL: string;
+  // "local" writes to ./uploads (dev only; container filesystems are
+  // ephemeral). "cloudinary" requires the three CLOUDINARY_* values.
+  MEDIA_STORAGE_DRIVER: "local" | "cloudinary";
+  CLOUDINARY_CLOUD_NAME?: string;
+  CLOUDINARY_API_KEY?: string;
+  CLOUDINARY_API_SECRET?: string;
+  CLOUDINARY_FOLDER: string;
   APP_BASE_URL: string;
   API_BASE_URL: string;
   FRONTEND_URL: string;
@@ -132,24 +148,81 @@ const testDatabaseName =
       : `${configuredDatabaseName}_test`
     : "roshan_blog_test");
 
+const databaseUrl = getOptionalEnv("DATABASE_URL");
+
+// With DATABASE_URL supplying host/user/password/database, the discrete DB_*
+// variables become optional. Without it they stay mandatory, so a
+// misconfigured deploy still fails fast at boot rather than at first query.
+function getDatabaseField(name: string, fallback: string): string {
+  if (databaseUrl) {
+    return getEnv(name, fallback);
+  }
+  return getEnv(name, isTestEnvironment ? fallback : undefined);
+}
+
+function getMediaStorageDriver(
+  nodeEnv: Env["NODE_ENV"],
+): Env["MEDIA_STORAGE_DRIVER"] {
+  const raw = getOptionalEnv("MEDIA_STORAGE_DRIVER")?.toLowerCase();
+  const driver =
+    raw === "cloudinary" || raw === "local"
+      ? raw
+      : nodeEnv === "production" || nodeEnv === "staging"
+        ? "cloudinary"
+        : "local";
+
+  if (driver === "cloudinary") {
+    // Fail at boot, not on the first upload. A silent fallback to local disk
+    // in production would drop every image on the next deploy.
+    for (const name of [
+      "CLOUDINARY_CLOUD_NAME",
+      "CLOUDINARY_API_KEY",
+      "CLOUDINARY_API_SECRET",
+    ]) {
+      if (!getOptionalEnv(name)) {
+        throw new Error(
+          `${name} is required when MEDIA_STORAGE_DRIVER is "cloudinary".`,
+        );
+      }
+    }
+  }
+
+  return driver;
+}
+
 const env: Env = {
   PORT: configuredPort,
   NODE_ENV: resolvedNodeEnv,
   TRUST_PROXY: getTrustProxyEnv(resolvedNodeEnv),
-  DB_HOST: getEnv("DB_HOST", isTestEnvironment ? "localhost" : undefined),
-  DB_PORT: Number(getEnv("DB_PORT", "5432")),
-  DB_NAME: isTestEnvironment ? testDatabaseName : getEnv("DB_NAME"),
-  DB_USER: getEnv(
-    "DB_USER",
-    isTestEnvironment ? getEnv("USER", "postgres") : undefined,
+  DATABASE_URL: databaseUrl,
+  DB_SSL_CA: getOptionalEnv("DB_SSL_CA"),
+  DB_SSL: getBooleanEnv(
+    "DB_SSL",
+    Boolean(databaseUrl) ||
+      resolvedNodeEnv === "production" ||
+      resolvedNodeEnv === "staging",
   ),
-  DB_PASSWORD: getEnv("DB_PASSWORD", isTestEnvironment ? "" : undefined),
+  DB_POOL_MAX: getPositiveNumberEnv("DB_POOL_MAX", "10"),
+  DB_HOST: getDatabaseField("DB_HOST", "localhost"),
+  DB_PORT: Number(getEnv("DB_PORT", "5432")),
+  DB_NAME: isTestEnvironment
+    ? testDatabaseName
+    : databaseUrl
+      ? getEnv("DB_NAME", "")
+      : getEnv("DB_NAME"),
+  DB_USER: getDatabaseField("DB_USER", getEnv("USER", "postgres")),
+  DB_PASSWORD: getDatabaseField("DB_PASSWORD", ""),
   JWT_SECRET: getStrongSecret("JWT_SECRET", resolvedNodeEnv),
   JWT_REFRESH_SECRET: getStrongSecret("JWT_REFRESH_SECRET", resolvedNodeEnv),
   MEDIA_BASE_URL: getEnv(
     "MEDIA_BASE_URL",
     `http://localhost:${configuredPort}`,
   ),
+  MEDIA_STORAGE_DRIVER: getMediaStorageDriver(resolvedNodeEnv),
+  CLOUDINARY_CLOUD_NAME: getOptionalEnv("CLOUDINARY_CLOUD_NAME"),
+  CLOUDINARY_API_KEY: getOptionalEnv("CLOUDINARY_API_KEY"),
+  CLOUDINARY_API_SECRET: getOptionalEnv("CLOUDINARY_API_SECRET"),
+  CLOUDINARY_FOLDER: getEnv("CLOUDINARY_FOLDER", "ca-roshan-blog"),
   APP_BASE_URL: appBaseUrl,
   API_BASE_URL: getEnv("API_BASE_URL", appBaseUrl),
   FRONTEND_URL: getEnv("FRONTEND_URL", "http://localhost:3000"),

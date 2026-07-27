@@ -5,6 +5,7 @@ import {
   verifyRefreshToken,
 } from "@utils/jwt";
 import { hashValue, compareHash } from "@utils/bcrypt";
+import { hashToken, verifyTokenHash } from "@utils/token-hash";
 import {
   ConflictError,
   NotFoundError,
@@ -129,8 +130,7 @@ export class AuthService {
     const accessToken = signAccessToken(payload);
     const refreshToken = signRefreshToken(payload);
 
-    const refreshTokenHash = await hashValue(refreshToken);
-    admin.refreshTokenHash = refreshTokenHash;
+    admin.refreshTokenHash = hashToken(refreshToken);
     await admin.save();
 
     const safeAdmin: AuthenticatedAdminResponse = {
@@ -159,12 +159,13 @@ export class AuthService {
       const admin = await Admin.findByPk(adminId);
       if (!admin || !admin.refreshTokenHash) return null;
 
-      const match = await compareHash(token, admin.refreshTokenHash);
-      if (!match) return null;
+      // Any refresh token that is not the current one is rejected, so a stolen
+      // token stops working the moment the real client rotates.
+      if (!verifyTokenHash(token, admin.refreshTokenHash)) return null;
 
       const newAccess = signAccessToken({ sub: admin.id });
       const newRefresh = signRefreshToken({ sub: admin.id });
-      admin.refreshTokenHash = await hashValue(newRefresh);
+      admin.refreshTokenHash = hashToken(newRefresh);
       await admin.save();
       return { accessToken: newAccess, refreshToken: newRefresh };
     } catch (_error: unknown) {

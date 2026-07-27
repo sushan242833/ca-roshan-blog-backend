@@ -11,13 +11,17 @@ import {
   NotFoundError,
 } from "./media.errors";
 import { StorageProvider } from "./storage/storage-provider.interface";
-import { LocalStorageProvider } from "./storage/local-storage.provider";
+import { resolveStorage } from "./storage/storage-provider.factory";
+
+// Resolved once at module load so a bad Cloudinary config surfaces at boot
+// rather than on the first upload. Tests still inject their own provider.
+const defaultStorage = resolveStorage();
 
 export class MediaService {
   constructor(
     private readonly repository: MediaRepository = mediaRepository,
-    private readonly storageProvider: StorageProvider = new LocalStorageProvider(),
-    private readonly provider: MediaProvider = MediaProvider.LOCAL,
+    private readonly storageProvider: StorageProvider = defaultStorage.provider,
+    private readonly provider: MediaProvider = defaultStorage.mediaProvider,
   ) {}
 
   async upload(dto: UploadMediaDto): Promise<Media> {

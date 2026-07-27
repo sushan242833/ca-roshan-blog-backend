@@ -4,9 +4,11 @@ import helmet from "helmet";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import morgan from "morgan";
+import compression from "compression";
 import rateLimit from "express-rate-limit";
 import path from "path";
 import { env } from "@config/env";
+import sequelize from "@config/config";
 import authRoutes from "@routes/auth.routes";
 import postRoutes from "@routes/post.routes";
 import tagRoutes from "@routes/tag.routes";
@@ -26,6 +28,10 @@ const app: Application = express();
 // instead of `true`, which would let a client spoof X-Forwarded-For to bypass
 // the limit.
 app.set("trust proxy", env.TRUST_PROXY);
+
+// Compresses JSON and HTML responses. Placed before the routes so every handler
+// benefits, and before express.static so /uploads is covered in local mode.
+app.use(compression());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -126,6 +132,31 @@ const healthHandler = (
 
 app.get("/health", healthHandler);
 app.get("/api/v1/health", healthHandler);
+
+// Liveness (above) answers "is the process up" and is what a platform health
+// check should poll, because restarting the container cannot fix a database
+// outage. Readiness (below) additionally proves the database is reachable and
+// is what uptime monitoring and alerting should watch.
+const readinessHandler = async (_req: Request, res: Response) => {
+  try {
+    await sequelize.authenticate();
+    return res.json({
+      success: true,
+      message: "Ready",
+      data: { database: "up" },
+    });
+  } catch (error: unknown) {
+    console.error("Readiness check failed", error);
+    return res.status(503).json({
+      success: false,
+      message: "Database unavailable",
+      error: { code: "DEPENDENCY_UNAVAILABLE" },
+    });
+  }
+};
+
+app.get("/health/ready", readinessHandler);
+app.get("/api/v1/health/ready", readinessHandler);
 
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/posts", postRoutes);
