@@ -33,12 +33,12 @@ app.set("trust proxy", env.TRUST_PROXY);
 // benefits, and before express.static so /uploads is covered in local mode.
 app.use(compression());
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
 app.use(helmet());
 app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
 app.use(cookieParser());
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 const uploadsDirectory = path.resolve(process.cwd(), "uploads");
 app.use(
