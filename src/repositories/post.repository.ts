@@ -91,6 +91,15 @@ function postAssociations(): Includeable[] {
   ];
 }
 
+// content, search_text and search_vector are three representations of the SAME
+// article body, so selecting all of them ships the body three times per row.
+// The list DTO (toPostSummaryResponse) reads none of them, so listings exclude
+// all three; detail reads keep content and drop only the two derived copies.
+// A column does NOT need to be in the SELECT list to be filtered or ordered on,
+// so the search WHERE/ORDER BY below keep working untouched.
+const LIST_EXCLUDED_ATTRIBUTES: string[] = ["content", "searchText", "search_vector"];
+const DETAIL_EXCLUDED_ATTRIBUTES: string[] = ["searchText", "search_vector"];
+
 // Restricts a listing to posts linked to a given category/tag slug via the
 // join tables, using a subquery so the loaded `categories`/`tags` arrays stay
 // complete (an include-level `where` would prune them to just the match).
@@ -279,6 +288,7 @@ export class PostRepository {
     options: FindPostOptions = {},
   ): Promise<Post | null> {
     return Post.findByPk(id, {
+      attributes: { exclude: DETAIL_EXCLUDED_ATTRIBUTES },
       transaction: options.transaction,
       paranoid: !options.includeDeleted,
       include: options.withAssociations ? postAssociations() : undefined,
@@ -287,6 +297,7 @@ export class PostRepository {
 
   async findPublishedBySlug(slug: string): Promise<Post | null> {
     return Post.findOne({
+      attributes: { exclude: DETAIL_EXCLUDED_ATTRIBUTES },
       where: {
         slug,
         status: PostStatus.PUBLISHED,
@@ -456,6 +467,7 @@ export class PostRepository {
     order: Order,
   ): FindAndCountOptions<PostAttributes> {
     return {
+      attributes: { exclude: LIST_EXCLUDED_ATTRIBUTES },
       where,
       offset: (filters.page - 1) * filters.limit,
       limit: filters.limit,
