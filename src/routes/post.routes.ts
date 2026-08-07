@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as controller from "@controllers/post.controller";
+import * as chapterController from "@controllers/chapter.controller";
 import { authMiddleware } from "@middleware/auth.middleware";
 import {
   validateCreatePost,
@@ -84,10 +85,33 @@ router.post<IdRequestParams, unknown, EmptyRequestBody>(
   authMiddleware,
   controller.generatePreviewToken,
 );
+// Chapter previews, registered above the two-segment /preview/:token so the
+// longer paths are matched first.
+router.get<{ token: string }, unknown, EmptyRequestBody>(
+  "/preview/:token/chapters",
+  chapterController.getPreviewChapterIndex,
+);
+router.get<{ token: string; chapterId: string }, unknown, EmptyRequestBody>(
+  "/preview/:token/chapters/:chapterId",
+  chapterController.getPreviewChapter,
+);
+
 router.get<{ token: string }, unknown, EmptyRequestBody>(
   "/preview/:token",
   controller.getByPreviewToken,
 );
+// Registered above the GET /:slug catch-all so they are matched first. These
+// are two- and three-segment paths, so they cannot collide with the
+// one-segment /:slug, but the ordering keeps the intent obvious.
+router.get<SlugRequestParams, unknown, EmptyRequestBody>(
+  "/:slug/chapters",
+  chapterController.getChapterIndex,
+);
+router.get<SlugRequestParams & { chapterId: string }, unknown, EmptyRequestBody>(
+  "/:slug/chapters/:chapterId",
+  chapterController.getChapter,
+);
+
 router.get<SlugRequestParams, unknown, EmptyRequestBody>(
   "/:slug",
   controller.getBySlug,

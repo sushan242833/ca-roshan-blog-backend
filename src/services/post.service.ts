@@ -485,7 +485,12 @@ export class PostService {
     return { token, expiresAt };
   }
 
-  async getByPreviewToken(token: string): Promise<PostDetailResponse> {
+  /**
+   * Verifies a preview token and returns the post it points at, whatever its
+   * status. Shared by the single-page preview response below and the chapter
+   * preview endpoints (chapter.service), so the token rules live in one place.
+   */
+  async resolvePreviewPost(token: string): Promise<Post> {
     let payload: { sub: string; type: string };
 
     try {
@@ -509,7 +514,11 @@ export class PostService {
     });
     if (!post) throw new NotFoundError("Post not found.");
 
-    return toPostDetailResponse(post);
+    return post;
+  }
+
+  async getByPreviewToken(token: string): Promise<PostDetailResponse> {
+    return toPostDetailResponse(await this.resolvePreviewPost(token));
   }
 
   async adminList(

@@ -117,3 +117,36 @@ export function toPostDetailResponse(post: Post): PostDetailResponse {
     content: post.content,
   };
 }
+
+export interface ChapterSummary {
+  id: string;
+  title: string;
+  order: number;
+  /** One-line summary shown under the title in chapter listings. */
+  excerpt: string | null;
+}
+
+// Returned by GET /api/v1/posts/:slug/chapters — the article landing page.
+// Short posts come back with `paginated: false` and the full `content` inline
+// (rendered as one page, unchanged behaviour). Large posts come back with
+// `paginated: true`, the chapter list, and `content: null`.
+export interface ChapterIndexResponse extends PostSummaryResponse {
+  paginated: boolean;
+  totalChapters: number;
+  chapters: ChapterSummary[];
+  content: string | null;
+}
+
+// Returned by GET /api/v1/posts/:slug/chapters/:chapterId — one chapter page.
+export interface ChapterDetailResponse extends PostSummaryResponse {
+  totalChapters: number;
+  chapter: {
+    id: string;
+    title: string;
+    order: number;
+    html: string;
+    excerpt: string | null;
+  };
+  prev: ChapterSummary | null;
+  next: ChapterSummary | null;
+}
