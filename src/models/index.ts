@@ -7,6 +7,7 @@ import { Subscriber } from "./subscriber.model";
 import { NewsletterLog } from "./newsletter-log.model";
 import { PostCategory } from "./post-category.model";
 import { PostTag } from "./post-tag.model";
+import { PostChapter } from "./post-chapter.model";
 import { Media } from "@modules/media/media.model";
 
 const models = [
@@ -18,6 +19,7 @@ const models = [
   NewsletterLog,
   PostCategory,
   PostTag,
+  PostChapter,
   Media,
 ];
 
@@ -35,5 +37,6 @@ export {
   NewsletterLog,
   PostCategory,
   PostTag,
+  PostChapter,
   Media,
 };

@@ -48,6 +48,54 @@ function headingText(inner: string): string {
   return decodeEntities(stripTags(inner)).replace(/\s+/g, " ").trim();
 }
 
+// Chapter titles and ids are persisted — post_chapters.title is VARCHAR(512)
+// and chapter_id is VARCHAR(255) — and a heading long enough to overflow either
+// would fail the bulk insert inside the post-save transaction, rolling the whole
+// create/update back as an unexplained 500. Clause-length headings are ordinary
+// in legal and tax writing, so both are bounded HERE rather than at the database:
+// the persisted split and the in-memory preview split have to agree on every
+// value, and a cap applied only on write would make a draft preview differently
+// than it publishes. Postgres counts VARCHAR limits in characters, so these are
+// character counts too.
+const MAX_TITLE_LENGTH = 500;
+// Leaves ample room inside 255 for the "-1", "-2" uniqueness suffix appended
+// below when two headings slugify to the same base.
+const MAX_ID_BASE_LENGTH = 200;
+
+// Trims back to a word boundary so a cut title does not end mid-word, and marks
+// the cut with an ellipsis exactly as chapter excerpts do. Titles at or under
+// the limit — which is every heading in ordinary content — pass through
+// untouched, so existing chapter titles and the ids derived from them are
+// unaffected.
+function capTitle(title: string): string {
+  if (title.length <= MAX_TITLE_LENGTH) {
+    return title;
+  }
+
+  const cut = title.slice(0, MAX_TITLE_LENGTH);
+  const lastSpace = cut.lastIndexOf(" ");
+  const trimmed = lastSpace > MAX_TITLE_LENGTH / 2 ? cut.slice(0, lastSpace) : cut;
+  return `${trimmed.trimEnd()}…`;
+}
+
+// The id base for a title, bounded so the finished id (base + any suffix) always
+// fits chapter_id. Cutting back to a hyphen keeps the id ending on a whole word,
+// and any separator the cut leaves behind is stripped so no id ends in "-" or
+// produces a doubled "--1" once a suffix is appended. Two long headings sharing
+// a 200-character prefix collapse to the same base and are then separated by the
+// suffix loop, exactly as two identical short headings already are.
+function boundedIdBase(title: string): string {
+  const slug = slugify(title);
+  if (slug.length <= MAX_ID_BASE_LENGTH) {
+    return slug || "chapter";
+  }
+
+  const cut = slug.slice(0, MAX_ID_BASE_LENGTH);
+  const lastHyphen = cut.lastIndexOf("-");
+  const trimmed = lastHyphen > MAX_ID_BASE_LENGTH / 2 ? cut.slice(0, lastHyphen) : cut;
+  return trimmed.replace(/-+$/, "") || "chapter";
+}
+
 const EXCERPT_MAX_LENGTH = 140;
 
 // Block boundaries have to become whitespace or adjacent blocks run together
@@ -135,7 +183,7 @@ export function splitIntoChapters(
 
   const usedIds = new Set<string>();
   const makeId = (title: string): string => {
-    const base = slugify(title) || "chapter";
+    const base = boundedIdBase(title);
     let id = base;
     let suffix = 1;
     while (usedIds.has(id)) {
@@ -146,15 +194,18 @@ export function splitIntoChapters(
     return id;
   };
 
-  // No headings: the whole post is one chapter.
+  // No headings: the whole post is one chapter. The fallback is the post title,
+  // which the posts table already bounds at 255, but it is capped through the
+  // same helper so every title in a split is produced one way.
   if (headings.length === 0) {
+    const title = capTitle(fallbackTitle);
     return [
       {
-        id: makeId(fallbackTitle),
-        title: fallbackTitle,
+        id: makeId(title),
+        title,
         order: 0,
         html: source,
-        excerpt: chapterExcerpt(source, fallbackTitle),
+        excerpt: chapterExcerpt(source, title),
       },
     ];
   }
@@ -189,7 +240,7 @@ export function splitIntoChapters(
   boundaries.forEach((boundary, i) => {
     const sliceEnd =
       i + 1 < boundaries.length ? boundaries[i + 1].index : source.length;
-    const title = boundary.text || `Chapter ${order + 1}`;
+    const title = capTitle(boundary.text) || `Chapter ${order + 1}`;
     const html = source.slice(boundary.end, sliceEnd);
     chapters.push({
       id: makeId(title),

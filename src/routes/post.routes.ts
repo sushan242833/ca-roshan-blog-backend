@@ -25,6 +25,12 @@ router.get<EmptyRequestParams, unknown, EmptyRequestBody>(
   "/featured",
   controller.listFeatured,
 );
+// A literal one-segment path, so it MUST stay above the GET /:slug catch-all
+// below or "chapter-manifest" would be read as a post slug and 404.
+router.get<EmptyRequestParams, unknown, EmptyRequestBody>(
+  "/chapter-manifest",
+  chapterController.getChapterManifest,
+);
 router.get<EmptyRequestParams, unknown, EmptyRequestBody>(
   "/admin/list",
   authMiddleware,
