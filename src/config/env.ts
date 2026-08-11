@@ -26,6 +26,10 @@ export interface Env {
   // managed provider requires it) or in production/staging. Set DB_SSL=false
   // only when pointing DATABASE_URL at a plaintext local Postgres.
   DB_SSL: boolean;
+  // Whether to verify the database's TLS certificate. Defaults to true and is
+  // forced to true in production/staging; DB_SSL_VERIFY=false is honoured only
+  // in development/test, for a local server with a self-signed certificate.
+  DB_SSL_VERIFY: boolean;
   DB_POOL_MAX: number;
   DB_HOST: string;
   DB_PORT: number;
@@ -202,6 +206,7 @@ const env: Env = {
       resolvedNodeEnv === "production" ||
       resolvedNodeEnv === "staging",
   ),
+  DB_SSL_VERIFY: getBooleanEnv("DB_SSL_VERIFY", true),
   DB_POOL_MAX: getPositiveNumberEnv("DB_POOL_MAX", "10"),
   DB_HOST: getDatabaseField("DB_HOST", "localhost"),
   DB_PORT: Number(getEnv("DB_PORT", "5432")),

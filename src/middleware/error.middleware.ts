@@ -1,18 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import { EmptyRequestBody, EmptyRequestParams } from "@app-types/http.requests";
-
-interface AppErrorShape {
-  status?: number;
-  statusCode?: number;
-  code?: string;
-  message?: string;
-  details?: unknown;
-  stack?: string;
-}
-
-function isAppErrorShape(value: unknown): value is AppErrorShape {
-  return typeof value === "object" && value !== null;
-}
+import { HttpError } from "@errors/http-error";
 
 export function errorMiddleware(
   err: unknown,
@@ -20,52 +8,49 @@ export function errorMiddleware(
   res: Response,
   _next: NextFunction,
 ) {
-  let status = 500;
-  let message = "Internal Server Error";
-  let code = "INTERNAL_SERVER_ERROR";
-  let details: unknown;
+  if (err instanceof HttpError) {
+    const payload: {
+      success: boolean;
+      message: string;
+      error: { code: string; details?: unknown };
+    } = {
+      success: false,
+      message: err.message,
+      error: {
+        code: err.code,
+        ...(typeof err.details !== "undefined" ? { details: err.details } : {}),
+      },
+    };
 
-  if (isAppErrorShape(err)) {
-    const candidateStatus = Number(err.statusCode ?? err.status);
-    if (
-      Number.isFinite(candidateStatus) &&
-      candidateStatus >= 400 &&
-      candidateStatus < 600
-    ) {
-      status = candidateStatus;
+    if (err.statusCode >= 500) {
+      console.error(err);
     }
 
-    if (typeof err.message === "string" && err.message.length > 0) {
-      message = err.message;
-    }
-
-    if (typeof err.code === "string" && err.code.length > 0) {
-      code = err.code;
-    }
-
-    details = err.details;
+    return res.status(err.statusCode).json(payload);
   }
 
-  const payload: {
+  console.error(err);
+
+  const body: {
     success: boolean;
     message: string;
     error: { code: string; details?: unknown };
   } = {
     success: false,
-    message,
+    message: "Internal Server Error",
     error: {
-      code,
+      code: "INTERNAL_SERVER_ERROR",
     },
   };
 
-  if (typeof details !== "undefined") {
-    payload.error.details = details;
-  } else if (process.env.NODE_ENV === "development" && isAppErrorShape(err)) {
-    payload.error.details = { stack: err.stack };
+  if (process.env.NODE_ENV === "development") {
+    body.error.details = {
+      message: (err as { message?: unknown } | null | undefined)?.message,
+      stack: (err as { stack?: unknown } | null | undefined)?.stack,
+    };
   }
 
-  console.error(err);
-  res.status(status).json(payload);
+  return res.status(500).json(body);
 }
 
 export default errorMiddleware;

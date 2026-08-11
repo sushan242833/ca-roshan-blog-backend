@@ -8,18 +8,6 @@ import {
 } from "../media.errors";
 import { sendError } from "../media.response";
 
-interface LegacyErrorShape {
-  status?: number;
-  statusCode?: number;
-  code?: string;
-  message?: string;
-  details?: unknown;
-}
-
-function isLegacyErrorShape(value: unknown): value is LegacyErrorShape {
-  return typeof value === "object" && value !== null;
-}
-
 function mapToHttpError(error: unknown): HttpError {
   if (error instanceof HttpError) {
     return error;
@@ -33,20 +21,6 @@ function mapToHttpError(error: unknown): HttpError {
     }
 
     return new BadRequestError("Invalid multipart upload payload.");
-  }
-
-  if (isLegacyErrorShape(error)) {
-    const statusCode = Number(error.statusCode ?? error.status);
-    const message = error.message ?? "Request failed";
-
-    if (Number.isFinite(statusCode) && statusCode >= 400 && statusCode < 600) {
-      return new HttpError(
-        statusCode,
-        message,
-        error.code ?? "REQUEST_ERROR",
-        error.details,
-      );
-    }
   }
 
   return new InternalServerError("Internal server error.");
