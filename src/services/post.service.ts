@@ -29,6 +29,7 @@ import postRepository, {
   PostListFilters,
   PostRepository,
 } from "@repositories/post.repository";
+import { regeneratePostChapters } from "@services/post-chapter.service";
 import { slugify } from "@utils/index";
 
 const WORDS_PER_MINUTE = 200;
@@ -246,6 +247,10 @@ export class PostService {
       await this.repository.replaceCategories(post.id, categoryIds, transaction);
       await this.repository.replaceTags(post.id, tagIds, transaction);
 
+      // Same transaction as the body it derives from, so the persisted split
+      // can never survive a rolled-back create.
+      await regeneratePostChapters(post, transaction, this.repository);
+
       await this.dispatchNewsletterOnce(
         post,
         post.status === PostStatus.PUBLISHED,
@@ -360,6 +365,18 @@ export class PostService {
       }
 
       await this.repository.save(post, transaction);
+
+      // The split is a projection of `content` sliced at headings, and the
+      // title supplies the chapter title when a post has no headings at all —
+      // so either field changing invalidates it. Anything else (status, SEO,
+      // taxonomies) leaves the stored chapters valid and is skipped.
+      if (
+        typeof dto.content !== "undefined" ||
+        typeof dto.title !== "undefined"
+      ) {
+        await regeneratePostChapters(post, transaction, this.repository);
+      }
+
       await this.dispatchNewsletterOnce(
         post,
         previousStatus === PostStatus.DRAFT &&

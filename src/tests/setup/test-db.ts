@@ -13,6 +13,7 @@ interface DatabaseRow {
 
 const TRUNCATED_TABLES = [
   "newsletter_logs",
+  "post_chapters",
   "post_tags",
   "post_categories",
   "posts",

@@ -13,6 +13,7 @@ import {
   Media,
   Post,
   PostCategory,
+  PostChapter,
   PostTag,
   Tag,
   sequelize,
@@ -22,6 +23,7 @@ import {
   PostCreationAttributes,
   PostStatus,
 } from "@models/post.model";
+import { PostChapterCreationAttributes } from "@models/post-chapter.model";
 
 export interface PostListFilters {
   page: number;
@@ -96,9 +98,34 @@ function postAssociations(): Includeable[] {
 // The list DTO (toPostSummaryResponse) reads none of them, so listings exclude
 // all three; detail reads keep content and drop only the two derived copies.
 // A column does NOT need to be in the SELECT list to be filtered or ordered on,
-// so the search WHERE/ORDER BY below keep working untouched.
-const LIST_EXCLUDED_ATTRIBUTES: string[] = ["content", "searchText", "search_vector"];
+// so the search WHERE/ORDER BY below keep working untouched. The same exclusion
+// serves the chapter read path (findPublishedBySlugLean): a paginated post's
+// landing and chapter pages need the post's metadata and none of its body.
+const LIST_EXCLUDED_ATTRIBUTES: string[] = [
+  "content",
+  "searchText",
+  "search_vector",
+];
+
 const DETAIL_EXCLUDED_ATTRIBUTES: string[] = ["searchText", "search_vector"];
+
+// Everything a chapter listing or a prev/next reference needs. `html` is
+// deliberately absent — it is the whole reason chapters are stored separately.
+const CHAPTER_SUMMARY_ATTRIBUTES: string[] = [
+  "chapterId",
+  "title",
+  "order",
+  "excerpt",
+];
+
+// The manifest needs even less than a summary: the URL segment and the sort
+// key. No `title`, no `excerpt`, and — as everywhere on this table — no `html`.
+const CHAPTER_MANIFEST_ATTRIBUTES: string[] = ["chapterId", "order"];
+
+export interface AdjacentChapters {
+  prev: PostChapter | null;
+  next: PostChapter | null;
+}
 
 // Restricts a listing to posts linked to a given category/tag slug via the
 // join tables, using a subquery so the loaded `categories`/`tags` arrays stay
@@ -176,7 +203,10 @@ export function normalizeSearchTokens(search?: string): string[] | null {
     return null;
   }
 
-  const tokens = trimmed.split(/\s+/).filter(Boolean).slice(0, MAX_SEARCH_TOKENS);
+  const tokens = trimmed
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, MAX_SEARCH_TOKENS);
   return tokens.length > 0 ? tokens : null;
 }
 
@@ -196,14 +226,18 @@ function tokenMatchesAnyColumn(escapedPattern: string): string {
 // Word-start prefix match: every token must prefix-match a word in at least one
 // searchable column (case-insensitive ~*). No end anchor, so typing "test1"
 // still matches "test10".
-function buildSearchWhere(search?: string): WhereOptions<PostAttributes> | null {
+function buildSearchWhere(
+  search?: string,
+): WhereOptions<PostAttributes> | null {
   const tokens = normalizeSearchTokens(search);
   if (!tokens) {
     return null;
   }
 
   const clause = tokens
-    .map((token) => tokenMatchesAnyColumn(sequelize.escape(buildPrefixPattern(token))))
+    .map((token) =>
+      tokenMatchesAnyColumn(sequelize.escape(buildPrefixPattern(token))),
+    )
     .join(" AND ");
 
   return sequelize.literal(clause) as unknown as WhereOptions<PostAttributes>;
@@ -235,8 +269,16 @@ function searchRankOrders(search?: string): OrderItem[] {
   }
 
   const phrase = sequelize.escape(buildPhrasePattern(tokens.join(" ")));
-  const titleExact = everyTokenMatches(`"Post"."title"`, tokens, buildExactWordPattern);
-  const titlePrefix = everyTokenMatches(`"Post"."title"`, tokens, buildPrefixPattern);
+  const titleExact = everyTokenMatches(
+    `"Post"."title"`,
+    tokens,
+    buildExactWordPattern,
+  );
+  const titlePrefix = everyTokenMatches(
+    `"Post"."title"`,
+    tokens,
+    buildPrefixPattern,
+  );
   const excerptPrefix = everyTokenMatches(
     `coalesce("Post"."excerpt", '')`,
     tokens,
@@ -306,6 +348,133 @@ export class PostRepository {
     });
   }
 
+  // Same row and same associations as findPublishedBySlug, minus the body. This
+  // is the entry point for every chapter read: for a paginated post the body is
+  // never needed (the chapters carry it), and for a short post it is fetched
+  // separately by findContentById only once it is going to be sent.
+  async findPublishedBySlugLean(slug: string): Promise<Post | null> {
+    return Post.findOne({
+      attributes: { exclude: LIST_EXCLUDED_ATTRIBUTES },
+      where: {
+        slug,
+        status: PostStatus.PUBLISHED,
+      },
+      include: postAssociations(),
+    });
+  }
+
+  // Targeted body fetch for the non-paginated inline path — one column, no
+  // associations, and no second copy of the text via search_text.
+  async findContentById(postId: string): Promise<string | null> {
+    const post = await Post.findByPk(postId, { attributes: ["content"] });
+    return post?.content ?? null;
+  }
+
+  // Ordered chapter summaries for the index page. Never selects `html`, so the
+  // response is bounded by the chapter count, not by the article's length.
+  async findPublishedChapterList(postId: string): Promise<PostChapter[]> {
+    return PostChapter.findAll({
+      attributes: CHAPTER_SUMMARY_ATTRIBUTES,
+      where: { postId },
+      order: [["order", "ASC"]],
+    });
+  }
+
+  // Every published, paginated post's chapter ids, in one query. This is the
+  // frontend build's static-param source: it replaces a post listing plus one
+  // chapter-index call per post with a single round trip.
+  //
+  // The inner join is load-bearing. A post can carry `paginated = true` with no
+  // chapter rows (a split that was never generated — see getIndex's fallback),
+  // and such a post renders as a single page with no chapter URLs at all.
+  // `required: true` drops it here for the same reason.
+  //
+  // Only three columns cross the wire: posts.slug, post_chapters.chapter_id and
+  // post_chapters."order". Neither posts.content nor post_chapters.html is in
+  // the SELECT list, so the response is bounded by the chapter count.
+  async findChapterManifest(): Promise<PostChapter[]> {
+    return PostChapter.findAll({
+      attributes: CHAPTER_MANIFEST_ATTRIBUTES,
+      include: [
+        {
+          model: Post,
+          required: true,
+          attributes: ["slug"],
+          where: { status: PostStatus.PUBLISHED, paginated: true },
+        },
+      ],
+      // Grouping downstream relies on each post's rows arriving contiguously,
+      // and the chapter order within a post is the reading order.
+      order: [
+        [{ model: Post, as: "post" }, "slug", "ASC"],
+        ["order", "ASC"],
+      ],
+    });
+  }
+
+  // The single row a chapter page renders — the only read that touches `html`,
+  // and it reads exactly one chapter's worth of it.
+  async findPublishedChapter(
+    postId: string,
+    chapterId: string,
+  ): Promise<PostChapter | null> {
+    return PostChapter.findOne({ where: { postId, chapterId } });
+  }
+
+  // Neighbours by `order`, resolved with two index-backed single-row lookups
+  // rather than by loading the chapter list. Null at either end of the post.
+  async findAdjacentChapterSummaries(
+    postId: string,
+    order: number,
+  ): Promise<AdjacentChapters> {
+    const [prev, next] = await Promise.all([
+      PostChapter.findOne({
+        attributes: CHAPTER_SUMMARY_ATTRIBUTES,
+        where: { postId, order: { [Op.lt]: order } },
+        order: [["order", "DESC"]],
+      }),
+      PostChapter.findOne({
+        attributes: CHAPTER_SUMMARY_ATTRIBUTES,
+        where: { postId, order: { [Op.gt]: order } },
+        order: [["order", "ASC"]],
+      }),
+    ]);
+
+    return { prev, next };
+  }
+
+  // Delete-then-insert, so a regeneration can never leave chapters from a
+  // previous revision behind. An empty list just clears them, which is what a
+  // post that has shrunk below the pagination threshold needs.
+  async replaceChapters(
+    postId: string,
+    chapters: PostChapterCreationAttributes[],
+    transaction: Transaction,
+  ): Promise<void> {
+    await PostChapter.destroy({ where: { postId }, transaction });
+
+    if (chapters.length === 0) {
+      return;
+    }
+
+    await PostChapter.bulkCreate(chapters, { transaction });
+  }
+
+  // Writes ONLY the two derived columns. A targeted update matters here: saving
+  // the whole instance would re-send `content` for no reason, and the generated
+  // search_vector column must never appear in a write at all.
+  async updateChapterMeta(
+    postId: string,
+    paginated: boolean,
+    chapterCount: number,
+    transaction: Transaction,
+  ): Promise<void> {
+    await Post.update(
+      { paginated, chapterCount },
+      { where: { id: postId }, transaction },
+    );
+  }
+
   async slugExists(
     slug: string,
     excludePostId?: string,
@@ -324,9 +493,11 @@ export class PostRepository {
   }
 
   async listPublished(filters: PostListFilters): Promise<PaginatedPosts> {
-    const conditions: WhereOptions<PostAttributes>[] = [{
-      status: PostStatus.PUBLISHED,
-    }];
+    const conditions: WhereOptions<PostAttributes>[] = [
+      {
+        status: PostStatus.PUBLISHED,
+      },
+    ];
     const searchWhere = buildSearchWhere(filters.search);
 
     if (typeof filters.featured === "boolean") {
@@ -376,7 +547,10 @@ export class PostRepository {
         conditions.length > 0 ? combineWhere(conditions) : {},
         // ["id","DESC"] is a stable tiebreaker so posts sharing a createdAt
         // aren't duplicated or skipped across page boundaries.
-        [["createdAt", "DESC"], ["id", "DESC"]],
+        [
+          ["createdAt", "DESC"],
+          ["id", "DESC"],
+        ],
       ),
       paranoid: !filters.includeDeleted,
     });

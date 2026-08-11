@@ -2,8 +2,25 @@ import { NextFunction, Request, Response } from "express";
 import chapterService from "@services/chapter.service";
 import {
   EmptyRequestBody,
+  EmptyRequestParams,
   SlugRequestParams,
 } from "@app-types/http.requests";
+
+// GET /api/v1/posts/chapter-manifest
+// Every published, paginated post's slug and chapter ids. Serves the frontend
+// build, which would otherwise call the chapter index once per post.
+export async function getChapterManifest(
+  _req: Request<EmptyRequestParams, unknown, EmptyRequestBody>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const data = await chapterService.getManifest();
+    return res.json({ success: true, data });
+  } catch (err) {
+    return next(err);
+  }
+}
 
 // GET /api/v1/posts/:slug/chapters
 // Small, cacheable index for the article landing page.
