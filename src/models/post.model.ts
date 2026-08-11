@@ -22,6 +22,7 @@ import Tag from "./tag.model";
 import PostCategory from "./post-category.model";
 import PostTag from "./post-tag.model";
 import NewsletterLog from "./newsletter-log.model";
+import PostChapter from "./post-chapter.model";
 import { Media } from "@modules/media/media.model";
 
 export enum PostStatus {
@@ -51,6 +52,13 @@ export interface PostAttributes {
   pdfUrl?: string | null;
   pdfLabel?: string | null;
   showFeaturedImage: boolean;
+  // Whether this post is served as a chapter list rather than one page. Derived
+  // from `content` and kept in step with the post_chapters rows by
+  // regeneratePostChapters — never set by a client.
+  paginated: boolean;
+  // Number of chapters the reader can page through; 1 for a non-paginated post.
+  // Denormalised so the index page never has to count post_chapters.
+  chapterCount: number;
   status: PostStatus;
   featured: boolean;
   readingTime: number;
@@ -78,6 +86,8 @@ export type PostCreationAttributes = Optional<
   | "pdfUrl"
   | "pdfLabel"
   | "showFeaturedImage"
+  | "paginated"
+  | "chapterCount"
   | "status"
   | "featured"
   | "readingTime"
@@ -156,6 +166,16 @@ export class Post extends Model<PostAttributes, PostCreationAttributes> {
   showFeaturedImage!: boolean;
 
   @AllowNull(false)
+  @Default(false)
+  @Column({ type: DataType.BOOLEAN })
+  paginated!: boolean;
+
+  @AllowNull(false)
+  @Default(1)
+  @Column({ type: DataType.INTEGER, field: "chapter_count" })
+  chapterCount!: number;
+
+  @AllowNull(false)
   @Default(PostStatus.DRAFT)
   @Column({
     type: DataType.ENUM(
@@ -228,6 +248,13 @@ export class Post extends Model<PostAttributes, PostCreationAttributes> {
 
   @HasMany(() => NewsletterLog)
   newsletterLogs?: NewsletterLog[];
+
+  // Persisted chapter split, present only for paginated posts. Deliberately
+  // never eager-loaded with the post: the point of the table is that a read
+  // touches one chapter row, not the whole set (and never the `html` column
+  // unless that one chapter is being served).
+  @HasMany(() => PostChapter)
+  chapters?: PostChapter[];
 }
 
 export default Post;
