@@ -25,4 +25,37 @@ export function validateLogin(
   return next();
 }
 
-export default { validateLogin };
+const MIN_PASSWORD_LENGTH = 12;
+
+export function validateChangePassword(
+  req: Request<EmptyRequestParams, unknown, unknown>,
+  _res: Response,
+  next: NextFunction,
+) {
+  const body = req.body;
+  const currentPassword = isRecord(body) ? body.currentPassword : undefined;
+  const newPassword = isRecord(body) ? body.newPassword : undefined;
+
+  if (!currentPassword || typeof currentPassword !== "string") {
+    return next(new BadRequestError("currentPassword is required."));
+  }
+
+  if (!newPassword || typeof newPassword !== "string") {
+    return next(new BadRequestError("newPassword is required."));
+  }
+
+  // Mirrors the service-side check in auth.service.ts, which stays as the
+  // authoritative one — this only turns it into a 400 before the bcrypt
+  // comparison runs.
+  if (newPassword.length < MIN_PASSWORD_LENGTH) {
+    return next(
+      new BadRequestError(
+        `newPassword must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+      ),
+    );
+  }
+
+  return next();
+}
+
+export default { validateLogin, validateChangePassword };

@@ -6,7 +6,11 @@ import {
 } from "@utils/jwt";
 import { hashValue, compareHash } from "@utils/bcrypt";
 import { hashToken, verifyTokenHash } from "@utils/token-hash";
-import { ConflictError, ValidationError } from "@errors/http-error";
+import {
+  ConflictError,
+  UnauthorizedError,
+  ValidationError,
+} from "@errors/http-error";
 
 const MIN_PASSWORD_LENGTH = 12;
 
@@ -81,6 +85,38 @@ export class AuthService {
       passwordHash,
       isActive: true,
     });
+  }
+
+  /**
+   * Changes the admin's password after re-proving the current one. Clearing
+   * refreshTokenHash logs out every live session, including this one — a
+   * password change is the response to a suspected compromise, so any session
+   * an attacker already holds has to die with it.
+   */
+  public async changePassword(
+    adminId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const admin = await Admin.findByPk(adminId);
+    if (!admin) throw new UnauthorizedError();
+
+    if (!(await compareHash(currentPassword, admin.passwordHash))) {
+      throw new UnauthorizedError("Current password is incorrect.");
+    }
+
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      throw new ValidationError([
+        {
+          field: "newPassword",
+          message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+        },
+      ]);
+    }
+
+    admin.passwordHash = await hashValue(newPassword);
+    admin.refreshTokenHash = null;
+    await admin.save();
   }
 
   public async login(

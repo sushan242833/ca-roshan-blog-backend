@@ -22,6 +22,11 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
 export type SubscribeRequest = CreateSubscriberDto;
 
 export interface VerifySubscriberRequest extends ParamsDictionary {

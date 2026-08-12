@@ -13,6 +13,7 @@ import {
   EmptyRequestParams,
   IdRequestParams,
 } from "@app-types/http.requests";
+import { auditContext, recordAudit } from "@utils/audit";
 
 interface MediaResponseDto {
   id: string;
@@ -125,6 +126,18 @@ class MediaController {
   ) {
     try {
       await mediaService.deleteById(req.params.id);
+
+      const { ip, userAgent } = auditContext(req);
+      await recordAudit({
+        action: "media.delete",
+        outcome: "success",
+        actorId: req.user?.id ?? null,
+        targetType: "media",
+        targetId: req.params.id,
+        ip,
+        userAgent,
+      });
+
       return res.status(204).send();
     } catch (error: unknown) {
       return next(error);

@@ -1,8 +1,13 @@
 import { Router } from "express";
 import * as controller from "@controllers/auth.controller";
-import { validateLogin } from "@validation/auth.validation";
-import { authMiddleware } from "@middleware/auth.middleware";
 import {
+  validateChangePassword,
+  validateLogin,
+} from "@validation/auth.validation";
+import { authMiddleware } from "@middleware/auth.middleware";
+import { loginLimiter } from "@middleware/rate-limit";
+import {
+  ChangePasswordRequest,
   EmptyRequestBody,
   EmptyRequestParams,
   LoginRequest,
@@ -27,5 +32,15 @@ router.get<EmptyRequestParams, unknown, EmptyRequestBody>(
   "/me",
   authMiddleware,
   controller.me,
+);
+// Rate limited as well as authenticated: the handler compares an
+// attacker-supplied currentPassword against the stored hash, so a stolen access
+// token must not buy unlimited guesses at the password itself.
+router.post<EmptyRequestParams, unknown, ChangePasswordRequest>(
+  "/password",
+  authMiddleware,
+  loginLimiter,
+  validateChangePassword,
+  controller.changePassword,
 );
 export default router;

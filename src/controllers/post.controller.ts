@@ -12,6 +12,7 @@ import {
   SlugRequestParams,
   UpdatePostRequest,
 } from "@app-types/http.requests";
+import { auditContext, recordAudit } from "@utils/audit";
 
 const DEFAULT_PUBLIC_LIMIT = 10;
 const DEFAULT_ADMIN_LIMIT = 20;
@@ -145,6 +146,18 @@ export async function deletePost(
 ) {
   try {
     await postService.softDelete(req.params.id);
+
+    const { ip, userAgent } = auditContext(req);
+    await recordAudit({
+      action: "post.delete",
+      outcome: "success",
+      actorId: req.user?.id ?? null,
+      targetType: "post",
+      targetId: req.params.id,
+      ip,
+      userAgent,
+    });
+
     return res.json({ success: true });
   } catch (err) {
     return next(err);
@@ -171,6 +184,18 @@ export async function publishPost(
 ) {
   try {
     const post = await postService.publish(req.params.id);
+
+    const { ip, userAgent } = auditContext(req);
+    await recordAudit({
+      action: "post.publish",
+      outcome: "success",
+      actorId: req.user?.id ?? null,
+      targetType: "post",
+      targetId: req.params.id,
+      ip,
+      userAgent,
+    });
+
     return res.json({ success: true, data: post });
   } catch (err) {
     return next(err);
@@ -305,6 +330,20 @@ export async function generatePreviewToken(
 ) {
   try {
     const result = await postService.generatePreviewToken(req.params.id);
+
+    // The generated token grants read access to an unpublished post, so its
+    // creation is recorded. The token itself is never written to the row.
+    const { ip, userAgent } = auditContext(req);
+    await recordAudit({
+      action: "post.preview_token",
+      outcome: "success",
+      actorId: req.user?.id ?? null,
+      targetType: "post",
+      targetId: req.params.id,
+      ip,
+      userAgent,
+    });
+
     return res.json({ success: true, data: result });
   } catch (err) {
     return next(err);
