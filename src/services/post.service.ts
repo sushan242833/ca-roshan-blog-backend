@@ -30,6 +30,7 @@ import postRepository, {
   PostRepository,
 } from "@repositories/post.repository";
 import { regeneratePostChapters } from "@services/post-chapter.service";
+import { sanitizeArticleHtml } from "@utils/sanitize-content";
 import { slugify } from "@utils/index";
 
 const WORDS_PER_MINUTE = 200;
@@ -201,7 +202,11 @@ export class PostService {
   ): Promise<PostDetailResponse> {
     return this.repository.transaction(async (transaction) => {
       const title = normalizeRequiredString(dto.title, "title");
-      const content = normalizeRequiredString(dto.content, "content");
+      // Sanitised before anything derives from it, so excerpt, searchText,
+      // readingTime and the chapter split all come from the stored copy.
+      const content = sanitizeArticleHtml(
+        normalizeRequiredString(dto.content, "content"),
+      );
       const excerpt = normalizeExcerpt(dto.excerpt) ?? createExcerpt(content);
       const metaTitle = normalizeOptionalString(dto.metaTitle) ?? title;
       const metaDescription =
@@ -291,7 +296,12 @@ export class PostService {
       }
 
       if (typeof dto.content !== "undefined") {
-        post.content = normalizeRequiredString(dto.content, "content");
+        // Assigned first so readingTime, searchText, the excerpt fallback and
+        // the chapter regeneration below all read the sanitised copy rather
+        // than the raw input.
+        post.content = sanitizeArticleHtml(
+          normalizeRequiredString(dto.content, "content"),
+        );
         post.readingTime = calculateReadingTime(post.content);
         post.searchText = stripHtml(post.content);
 
