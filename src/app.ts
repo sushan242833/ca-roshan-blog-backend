@@ -87,8 +87,8 @@ const isTestEnv = env.NODE_ENV === "test";
 // trip it.
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: isTestEnv ? 1_000_000 : 300,
-  standardHeaders: true,
+  limit: isTestEnv ? 1_000_000 : 300,
+  standardHeaders: "draft-7",
   legacyHeaders: false,
   handler: rateLimitHandler(
     "Too many requests. Please slow down and try again shortly.",
@@ -98,8 +98,8 @@ const generalLimiter = rateLimit({
 // Search is deliberately much tighter and applies only to search requests.
 const searchLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: isTestEnv ? 1_000_000 : 30,
-  standardHeaders: true,
+  limit: isTestEnv ? 1_000_000 : 30,
+  standardHeaders: "draft-7",
   legacyHeaders: false,
   skip: (req) => !hasSearchQuery(req),
   handler: rateLimitHandler(
@@ -109,8 +109,8 @@ const searchLimiter = rateLimit({
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: isTestEnv ? 1_000_000 : 10,
-  standardHeaders: true,
+  limit: isTestEnv ? 1_000_000 : 10,
+  standardHeaders: "draft-7",
   legacyHeaders: false,
   skipSuccessfulRequests: true,
   handler: rateLimitHandler("Too many login attempts. Please try again later."),

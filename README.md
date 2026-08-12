@@ -21,6 +21,29 @@ npm run dev
 
 This scaffold uses path aliases defined in `tsconfig.json`. The dev script uses `ts-node-dev` with `tsconfig-paths` to resolve the aliases at runtime.
 
+## Deployment
+
+Build and start on the host with:
+
+```bash
+npm run deploy:build   # npm ci && npm run build && npm prune --omit=dev
+npm start
+```
+
+`npm ci --omit=dev` on its own is **not** a valid deploy step for this project: `tsc`
+lives in `devDependencies`, so a production-only install has nothing to compile
+`dist/` with. The `deploy:build` script installs the full tree, compiles, and then
+prunes — leaving `node_modules` free of TypeScript, supertest, sequelize-cli and
+ts-node-dev while `dist/` is already built.
+
+If your platform builds and runs in separate images (multi-stage Docker), compile in
+the build stage and run `npm ci --omit=dev` in the runtime stage, copying `dist/` across.
+
+Note that `tsconfig-paths` is a **runtime** dependency, not a dev one: `npm start`
+loads `dist/register-paths.js`, which requires it to resolve the `@config/*`-style
+path aliases. Moving it back into `devDependencies` will make a pruned production
+install crash on boot.
+
 ## Feature flags
 
 Flags follow the `FEATURE_FLAG_*` convention: the string `"1"` (or `"true"`) turns a feature **on**; `"0"` or an unset variable turns it **off**. The default when unset is always **off**, so forgetting the variable hides the feature rather than exposing it.

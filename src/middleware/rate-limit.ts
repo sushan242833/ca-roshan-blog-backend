@@ -7,8 +7,8 @@ import type { Request, Response } from "express";
 // security control, not incidental middleware.
 export const emailLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 5,
-  standardHeaders: true,
+  limit: 5,
+  standardHeaders: "draft-7",
   legacyHeaders: false,
   handler: (_req: Request, res: Response) => {
     res.status(429).json({
