@@ -3,6 +3,7 @@ import mediaRepository, { MediaRepository } from "./media.repository";
 import {
   MediaKind,
   UploadMediaDto,
+  assertContentMatchesMimeType,
   assertUploadMediaDto,
   toMediaIdParamDto,
 } from "./media.dto";
@@ -26,6 +27,9 @@ export class MediaService {
 
   async upload(dto: UploadMediaDto): Promise<Media> {
     assertUploadMediaDto(dto);
+    // Runs before the buffer reaches storage, so a file whose bytes contradict
+    // its declared Content-Type is never written anywhere.
+    await assertContentMatchesMimeType(dto.buffer, dto.mimeType);
 
     const uploadedUrl = await this.storageProvider.upload({
       fileName: dto.fileName,
