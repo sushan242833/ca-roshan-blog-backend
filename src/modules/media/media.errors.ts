@@ -1,5 +1,6 @@
 export {
   BadRequestError,
+  ConflictError,
   HttpError,
   InternalServerError,
   NotFoundError,

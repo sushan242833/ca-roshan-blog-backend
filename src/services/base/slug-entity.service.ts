@@ -35,7 +35,7 @@ export class SlugEntityService<TModel extends Model & SlugEntityAttributes> {
     name: string,
     transaction: Transaction,
   ): Promise<string> {
-    const base = slugify(name);
+    const base = slugify(name, this.entityName.toLowerCase());
     let slug = base;
     let idx = 1;
     // eslint-disable-next-line no-await-in-loop
@@ -49,7 +49,7 @@ export class SlugEntityService<TModel extends Model & SlugEntityAttributes> {
   async create(dto: SlugEntityCreateDto): Promise<TModel> {
     return sequelize.transaction(async (t) => {
       const slug = dto.slug
-        ? slugify(dto.slug)
+        ? slugify(dto.slug, this.entityName.toLowerCase())
         : await this.generateUniqueSlug(dto.name, t);
       const existing = await this.model.findOne({
         where: { slug } as any,
@@ -82,7 +82,7 @@ export class SlugEntityService<TModel extends Model & SlugEntityAttributes> {
         (entity as any).description = dto.description;
       }
       if (dto.slug) {
-        const newSlug = slugify(dto.slug);
+        const newSlug = slugify(dto.slug, this.entityName.toLowerCase());
         const existing = await this.model.findOne({
           where: { slug: newSlug, id: { [Op.ne]: id } } as any,
           transaction: t,

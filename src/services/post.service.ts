@@ -50,7 +50,9 @@ function normalizeRequiredString(value: string, field: string): string {
   return normalized;
 }
 
-function normalizeOptionalString(value: string | null | undefined): string | null {
+function normalizeOptionalString(
+  value: string | null | undefined,
+): string | null {
   if (typeof value !== "string") {
     return null;
   }
@@ -139,7 +141,30 @@ function applyStatus(post: Post, status: PostStatus): void {
   }
 }
 
-function validateSeo(metaTitle: string | null, metaDescription: string | null): void {
+function truncateForSeo(value: string, max: number): string {
+  if (value.length <= max) {
+    return value;
+  }
+
+  const cut = value.slice(0, max - 1);
+  const lastSpace = cut.lastIndexOf(" ");
+
+  const trimmed = lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut;
+  return `${trimmed.trimEnd()}…`;
+}
+
+function deriveMetaTitle(title: string): string {
+  return truncateForSeo(title, MAX_META_TITLE_LENGTH);
+}
+
+function deriveMetaDescription(excerpt: string | null): string {
+  return truncateForSeo(excerpt ?? "", MAX_META_DESCRIPTION_LENGTH);
+}
+
+function validateSeo(
+  metaTitle: string | null,
+  metaDescription: string | null,
+): void {
   const errors: ValidationIssue[] = [];
 
   if (metaTitle && metaTitle.length > MAX_META_TITLE_LENGTH) {
@@ -213,16 +238,21 @@ export class PostService {
         normalizeRequiredString(dto.content, "content"),
       );
       const excerpt = normalizeExcerpt(dto.excerpt) ?? createExcerpt(content);
-      const metaTitle = normalizeOptionalString(dto.metaTitle) ?? title;
-      const metaDescription =
-        normalizeOptionalString(dto.metaDescription) ?? excerpt;
+      const explicitMetaTitle = normalizeOptionalString(dto.metaTitle);
+      const explicitMetaDescription = normalizeOptionalString(
+        dto.metaDescription,
+      );
       const pdfUrl = normalizeOptionalString(dto.pdfUrl);
       const pdfLabel = normalizeOptionalString(dto.pdfLabel);
       const status = resolveCreateStatus(dto);
       const categoryIds = uniqueValues(dto.categoryIds);
       const tagIds = uniqueValues(dto.tagIds);
 
-      validateSeo(metaTitle, metaDescription);
+      validateSeo(explicitMetaTitle, explicitMetaDescription);
+
+      const metaTitle = explicitMetaTitle ?? deriveMetaTitle(title);
+      const metaDescription =
+        explicitMetaDescription ?? deriveMetaDescription(excerpt);
       await this.assertFeaturedImageExists(dto.featuredImageId, transaction);
       await this.assertCategoryExists(dto.categoryId, transaction);
       await this.assertTaxonomyIdsExist(categoryIds, tagIds, transaction);
@@ -254,7 +284,11 @@ export class PostService {
       };
 
       const post = await this.repository.create(payload, transaction);
-      await this.repository.replaceCategories(post.id, categoryIds, transaction);
+      await this.repository.replaceCategories(
+        post.id,
+        categoryIds,
+        transaction,
+      );
       await this.repository.replaceTags(post.id, tagIds, transaction);
 
       // Same transaction as the body it derives from, so the persisted split
@@ -284,26 +318,37 @@ export class PostService {
       }
 
       const previousStatus = post.status;
-      const metaTitleWasFallback = !post.metaTitle || post.metaTitle === post.title;
+
+      const metaTitleWasFallback =
+        !post.metaTitle ||
+        post.metaTitle === post.title ||
+        post.metaTitle === deriveMetaTitle(post.title);
       const metaDescriptionWasFallback =
-        !post.metaDescription || post.metaDescription === (post.excerpt ?? "");
+        !post.metaDescription ||
+        post.metaDescription === (post.excerpt ?? "") ||
+        post.metaDescription === deriveMetaDescription(post.excerpt ?? null);
 
       if (typeof dto.title !== "undefined") {
         const title = normalizeRequiredString(dto.title, "title");
         if (title !== post.title && typeof dto.slug === "undefined") {
-          post.slug = await this.generateUniqueSlug(title, post.id, transaction);
+          post.slug = await this.generateUniqueSlug(
+            title,
+            post.id,
+            transaction,
+          );
         }
         post.title = title;
       }
 
       if (typeof dto.slug !== "undefined") {
-        post.slug = await this.generateUniqueSlug(dto.slug, post.id, transaction);
+        post.slug = await this.generateUniqueSlug(
+          dto.slug,
+          post.id,
+          transaction,
+        );
       }
 
       if (typeof dto.content !== "undefined") {
-        // Assigned first so readingTime, searchText, the excerpt fallback and
-        // the chapter regeneration below all read the sanitised copy rather
-        // than the raw input.
         post.content = sanitizeArticleHtml(
           normalizeRequiredString(dto.content, "content"),
         );
@@ -338,20 +383,30 @@ export class PostService {
         applyStatus(post, nextStatus);
       }
 
+      const explicitMetaTitle =
+        typeof dto.metaTitle !== "undefined"
+          ? normalizeOptionalString(dto.metaTitle)
+          : undefined;
+      const explicitMetaDescription =
+        typeof dto.metaDescription !== "undefined"
+          ? normalizeOptionalString(dto.metaDescription)
+          : undefined;
+
+      validateSeo(explicitMetaTitle ?? null, explicitMetaDescription ?? null);
+
       if (typeof dto.metaTitle !== "undefined") {
-        post.metaTitle = normalizeOptionalString(dto.metaTitle) ?? post.title;
+        post.metaTitle = explicitMetaTitle ?? deriveMetaTitle(post.title);
       } else if (metaTitleWasFallback) {
-        post.metaTitle = post.title;
+        post.metaTitle = deriveMetaTitle(post.title);
       }
 
       if (typeof dto.metaDescription !== "undefined") {
         post.metaDescription =
-          normalizeOptionalString(dto.metaDescription) ?? (post.excerpt ?? "");
+          explicitMetaDescription ??
+          deriveMetaDescription(post.excerpt ?? null);
       } else if (metaDescriptionWasFallback) {
-        post.metaDescription = post.excerpt ?? "";
+        post.metaDescription = deriveMetaDescription(post.excerpt ?? null);
       }
-
-      validateSeo(post.metaTitle ?? null, post.metaDescription ?? null);
 
       // Sending null (or an empty string) clears the PDF; undefined leaves it
       // untouched, mirroring how the optional SEO fields flow through above.
@@ -370,7 +425,11 @@ export class PostService {
       if (dto.categoryIds) {
         const categoryIds = uniqueValues(dto.categoryIds);
         await this.assertTaxonomyIdsExist(categoryIds, undefined, transaction);
-        await this.repository.replaceCategories(post.id, categoryIds, transaction);
+        await this.repository.replaceCategories(
+          post.id,
+          categoryIds,
+          transaction,
+        );
       }
 
       if (dto.tagIds) {
@@ -533,9 +592,7 @@ export class PostService {
    * response must not reveal which.
    */
   async resolvePreviewPost(token: string): Promise<Post> {
-    const post = await this.repository.findByPreviewTokenHash(
-      hashToken(token),
-    );
+    const post = await this.repository.findByPreviewTokenHash(hashToken(token));
     if (!post) {
       throw new UnauthorizedError("Preview link is invalid or has expired.");
     }

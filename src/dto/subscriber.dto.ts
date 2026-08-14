@@ -20,6 +20,16 @@ export interface SubscriberResponse {
   updatedAt: Date;
 }
 
+export interface PublicSubscriberStatusResponse {
+  status: SubscriberStatus;
+}
+
+export function toPublicSubscriberStatusResponse(
+  subscriber: Subscriber,
+): PublicSubscriberStatusResponse {
+  return { status: subscriber.status };
+}
+
 export interface SubscriberStatsResponse {
   total: number;
   pending: number;
