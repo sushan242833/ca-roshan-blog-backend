@@ -101,13 +101,20 @@ function postAssociations(): Includeable[] {
 // so the search WHERE/ORDER BY below keep working untouched. The same exclusion
 // serves the chapter read path (findPublishedBySlugLean): a paginated post's
 // landing and chapter pages need the post's metadata and none of its body.
+// previewTokenHash is the secret behind a preview link: it is matched in a
+// WHERE clause and must never be selected into anything a client can see.
 const LIST_EXCLUDED_ATTRIBUTES: string[] = [
   "content",
   "searchText",
   "search_vector",
+  "previewTokenHash",
 ];
 
-const DETAIL_EXCLUDED_ATTRIBUTES: string[] = ["searchText", "search_vector"];
+const DETAIL_EXCLUDED_ATTRIBUTES: string[] = [
+  "searchText",
+  "search_vector",
+  "previewTokenHash",
+];
 
 // Everything a chapter listing or a prev/next reference needs. `html` is
 // deliberately absent — it is the whole reason chapters are stored separately.
@@ -334,6 +341,38 @@ export class PostRepository {
       transaction: options.transaction,
       paranoid: !options.includeDeleted,
       include: options.withAssociations ? postAssociations() : undefined,
+    });
+  }
+
+  // Replaces the previous post's preview link, if any: one live link per post,
+  // so regenerating is also how an author revokes a link they shared by
+  // mistake. Returns whether a row was actually updated, which is how the
+  // caller learns the post is gone.
+  async setPreviewToken(
+    postId: string,
+    tokenHash: string,
+    expiresAt: Date,
+  ): Promise<boolean> {
+    const [affectedRows] = await Post.update(
+      { previewTokenHash: tokenHash, previewTokenExpiresAt: expiresAt },
+      { where: { id: postId } },
+    );
+
+    return affectedRows > 0;
+  }
+
+  // Expiry is part of the query rather than a follow-up check, so an expired
+  // link and an unknown one are indistinguishable from the outside — neither
+  // confirms that a post exists. Soft-deleted posts are excluded by the
+  // model's default paranoid scope.
+  async findByPreviewTokenHash(tokenHash: string): Promise<Post | null> {
+    return Post.findOne({
+      attributes: { exclude: DETAIL_EXCLUDED_ATTRIBUTES },
+      where: {
+        previewTokenHash: tokenHash,
+        previewTokenExpiresAt: { [Op.gt]: new Date() },
+      },
+      include: postAssociations(),
     });
   }
 

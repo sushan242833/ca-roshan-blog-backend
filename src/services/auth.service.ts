@@ -35,9 +35,6 @@ interface LoginResponse {
   tokens: Tokens;
 }
 
-// GET /me mirrors the login payload: identity plus the author-byline fields
-// that post responses embed. The About page no longer reads any of this — its
-// content is static in the frontend bundle.
 export type AdminProfileResponse = AuthenticatedAdminResponse;
 
 const PROFILE_ATTRIBUTES = [
@@ -87,12 +84,6 @@ export class AuthService {
     });
   }
 
-  /**
-   * Changes the admin's password after re-proving the current one. Clearing
-   * refreshTokenHash logs out every live session, including this one — a
-   * password change is the response to a suspected compromise, so any session
-   * an attacker already holds has to die with it.
-   */
   public async changePassword(
     adminId: string,
     currentPassword: string,
@@ -116,6 +107,7 @@ export class AuthService {
 
     admin.passwordHash = await hashValue(newPassword);
     admin.refreshTokenHash = null;
+    admin.sessionsInvalidatedAt = new Date();
     await admin.save();
   }
 
@@ -154,6 +146,7 @@ export class AuthService {
     const admin = await Admin.findByPk(adminId);
     if (!admin) return;
     admin.refreshTokenHash = null;
+    admin.sessionsInvalidatedAt = new Date();
     await admin.save();
   }
 

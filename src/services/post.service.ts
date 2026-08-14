@@ -1,6 +1,5 @@
+import { randomBytes } from "crypto";
 import { Transaction } from "sequelize";
-import jwt from "jsonwebtoken";
-import { env } from "@config/env";
 import { CreatePostDto } from "@dto/create-post.dto";
 import { PaginatedResponse } from "@dto/pagination.dto";
 import {
@@ -31,11 +30,17 @@ import postRepository, {
 } from "@repositories/post.repository";
 import { regeneratePostChapters } from "@services/post-chapter.service";
 import { sanitizeArticleHtml } from "@utils/sanitize-content";
+import { hashToken } from "@utils/token-hash";
 import { slugify } from "@utils/index";
 
 const WORDS_PER_MINUTE = 200;
 const MAX_META_TITLE_LENGTH = 60;
 const MAX_META_DESCRIPTION_LENGTH = 160;
+
+// 256 bits of entropy, hex-encoded into a 64-character URL segment. Guessing
+// one is not a threat model, which is why the token needs no signature.
+const PREVIEW_TOKEN_BYTES = 32;
+const PREVIEW_TOKEN_TTL_MS = 60 * 60 * 1000;
 
 function normalizeRequiredString(value: string, field: string): string {
   const normalized = value.trim();
@@ -493,53 +498,47 @@ export class PostService {
     return { totalPosts, published, drafts, archived };
   }
 
+  /**
+   * Mints a preview link for a post of any status. The token is opaque random
+   * bytes, not a signed claim: it carries no key of the application's, so a
+   * leaked preview link is worth exactly one draft rather than being one
+   * forgotten `type` check away from an admin session. Only its digest is
+   * stored, and a new call replaces the previous link.
+   */
   async generatePreviewToken(postId: string): Promise<{
     token: string;
     expiresAt: Date;
   }> {
-    // Verify the post exists (published or draft, not soft-deleted)
-    const post = await Post.findByPk(postId, { paranoid: true });
-    if (!post) throw new NotFoundError("Post not found.");
+    const token = randomBytes(PREVIEW_TOKEN_BYTES).toString("hex");
+    const expiresAt = new Date(Date.now() + PREVIEW_TOKEN_TTL_MS);
 
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 60 minutes
-
-    const token = jwt.sign(
-      { sub: postId, type: "preview" },
-      env.JWT_SECRET,
-      { expiresIn: "1h", algorithm: "HS256" },
+    // The update doubles as the existence check (published or draft, not
+    // soft-deleted), so there is no separate lookup to race against.
+    const updated = await this.repository.setPreviewToken(
+      postId,
+      hashToken(token),
+      expiresAt,
     );
+    if (!updated) throw new NotFoundError("Post not found.");
 
     return { token, expiresAt };
   }
 
   /**
-   * Verifies a preview token and returns the post it points at, whatever its
+   * Resolves a preview token to the post it was minted for, whatever its
    * status. Shared by the single-page preview response below and the chapter
    * preview endpoints (chapter.service), so the token rules live in one place.
+   *
+   * Unknown, expired and revoked tokens are one case with one message: the
+   * response must not reveal which.
    */
   async resolvePreviewPost(token: string): Promise<Post> {
-    let payload: { sub: string; type: string };
-
-    try {
-      payload = jwt.verify(token, env.JWT_SECRET, {
-        algorithms: ["HS256"],
-      }) as {
-        sub: string;
-        type: string;
-      };
-    } catch {
+    const post = await this.repository.findByPreviewTokenHash(
+      hashToken(token),
+    );
+    if (!post) {
       throw new UnauthorizedError("Preview link is invalid or has expired.");
     }
-
-    if (payload.type !== "preview") {
-      throw new UnauthorizedError("Invalid preview token.");
-    }
-
-    // Fetch the post regardless of status (draft or published)
-    const post = await this.repository.findById(payload.sub, {
-      withAssociations: true,
-    });
-    if (!post) throw new NotFoundError("Post not found.");
 
     return post;
   }

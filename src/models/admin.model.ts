@@ -26,6 +26,7 @@ export interface AdminAttributes {
   bio?: string | null;
   avatarUrl?: string | null;
   refreshTokenHash?: string | null;
+  sessionsInvalidatedAt?: Date | null;
   singletonKey?: number;
   createdAt?: Date;
   updatedAt?: Date;
@@ -38,6 +39,7 @@ export type AdminCreationAttributes = Optional<
   | "title"
   | "bio"
   | "avatarUrl"
+  | "sessionsInvalidatedAt"
   | "singletonKey"
   | "createdAt"
   | "updatedAt"
@@ -91,6 +93,10 @@ export class Admin extends Model<AdminAttributes, AdminCreationAttributes> {
   @AllowNull(true)
   @Column({ field: "refresh_token_hash", type: DataType.STRING })
   refreshTokenHash?: string | null;
+
+  @AllowNull(true)
+  @Column({ field: "sessions_invalidated_at", type: DataType.DATE })
+  sessionsInvalidatedAt?: Date | null;
 
   @CreatedAt
   @Column({ field: "created_at" })
