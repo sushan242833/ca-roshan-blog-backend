@@ -30,19 +30,9 @@ interface MediaResponseBody {
   data: MediaResponseDto;
 }
 
-// GET /media is paginated: { items, pagination }. The unpaginated flat array
-// it used to return grew with the whole library.
 interface MediaListResponseBody {
   success: boolean;
-  data: {
-    items: MediaResponseDto[];
-    pagination: {
-      page: number;
-      limit: number;
-      total: number;
-      totalPages: number;
-    };
-  };
+  data: MediaResponseDto[];
 }
 
 const UPLOADS_DIRECTORY = path.resolve(process.cwd(), "uploads");
@@ -175,9 +165,8 @@ describe("media", () => {
     const body = response.body as MediaListResponseBody;
 
     assert.equal(body.success, true);
-    assert.equal(body.data.items.length, 1);
-    assert.equal(body.data.items[0].id, media.id);
-    assert.equal(body.data.pagination.total, 1);
+    assert.equal(body.data.length, 1);
+    assert.equal(body.data[0].id, media.id);
   });
 
   it("rejects an unauthenticated media list", async () => {
@@ -200,7 +189,7 @@ describe("media", () => {
       .expect(200);
     const body = response.body as MediaListResponseBody;
 
-    assert.equal(body.data.items.length, 0);
+    assert.equal(body.data.length, 0);
     assert.equal(await fileExists(uploadedFilePath(media.fileName)), false);
   });
 
@@ -268,9 +257,9 @@ describe("media", () => {
       .expect(200);
     const docs = docsResponse.body as MediaListResponseBody;
 
-    assert.equal(docs.data.items.length, 1);
-    assert.equal(docs.data.items[0].id, pdf.id);
-    assert.equal(docs.data.items[0].kind, "document");
+    assert.equal(docs.data.length, 1);
+    assert.equal(docs.data[0].id, pdf.id);
+    assert.equal(docs.data[0].kind, "document");
 
     const imagesResponse = await createTestRequest()
       .get("/api/v1/media?type=image")
@@ -278,8 +267,8 @@ describe("media", () => {
       .expect(200);
     const images = imagesResponse.body as MediaListResponseBody;
 
-    assert.equal(images.data.items.length, 1);
-    assert.equal(images.data.items[0].id, image.id);
-    assert.equal(images.data.items[0].kind, "image");
+    assert.equal(images.data.length, 1);
+    assert.equal(images.data[0].id, image.id);
+    assert.equal(images.data[0].kind, "image");
   });
 });

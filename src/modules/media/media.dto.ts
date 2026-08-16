@@ -1,8 +1,5 @@
 import path from "path";
 import { randomUUID } from "crypto";
-// v16 is the last CommonJS release of file-type; v17+ is pure ESM and cannot be
-// `require`d from this CommonJS build.
-import { fromBuffer as fileTypeFromBuffer } from "file-type";
 import {
   BadRequestError,
   PayloadTooLargeError,
@@ -112,28 +109,6 @@ export function assertAllowedMimeType(
 export function buildStoredFileName(mimeType: AllowedMimeType): string {
   const extension = MIME_EXTENSION_MAP[mimeType];
   return `${randomUUID()}.${extension}`;
-}
-
-// The multipart Content-Type is supplied by the client and can claim anything.
-// These are the extensions file-type may report for each type we accept, so a
-// file's real leading bytes have to back up whatever it says it is.
-const MAGIC_BYTES_BY_MIME: Record<AllowedMimeType, string[]> = {
-  "image/jpeg": ["jpg"],
-  "image/png": ["png"],
-  "image/webp": ["webp"],
-  "application/pdf": ["pdf"],
-};
-
-export async function assertContentMatchesMimeType(
-  buffer: Buffer,
-  mimeType: AllowedMimeType,
-): Promise<void> {
-  const detected = await fileTypeFromBuffer(buffer);
-  if (!detected || !MAGIC_BYTES_BY_MIME[mimeType].includes(detected.ext)) {
-    throw new UnsupportedMediaTypeError(
-      "File contents do not match the declared file type.",
-    );
-  }
 }
 
 export function sanitizeOriginalFileName(originalName: string): string {

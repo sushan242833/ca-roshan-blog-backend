@@ -13,7 +13,6 @@ import {
   EmptyRequestParams,
   IdRequestParams,
 } from "@app-types/http.requests";
-import { auditContext, recordAudit } from "@utils/audit";
 
 interface MediaResponseDto {
   id: string;
@@ -43,25 +42,12 @@ function toMediaResponseDto(media: Media): MediaResponseDto {
   };
 }
 
-// The media library grows without bound, so the listing is paginated. The
-// default page size fills the picker grid; the cap stops a caller asking for
-// the whole library in one response.
-const DEFAULT_MEDIA_LIMIT = 24;
-const MAX_MEDIA_LIMIT = 100;
-
 // ?type=image|document narrows the listing; anything else lists everything.
 function parseMediaKindQuery(value: unknown): MediaKind | undefined {
   if (value === "image" || value === "document") {
     return value;
   }
   return undefined;
-}
-
-// A malformed page/limit falls back to the default rather than 400-ing: this is
-// an internal admin listing, and a bad query string should not break the picker.
-function parsePositiveIntQuery(value: unknown, fallback: number): number {
-  const raw = typeof value === "string" ? Number(value) : NaN;
-  return Number.isInteger(raw) && raw > 0 ? raw : fallback;
 }
 
 class MediaController {
@@ -102,25 +88,13 @@ class MediaController {
   ) {
     try {
       const kind = parseMediaKindQuery(req.query.type);
-      const page = parsePositiveIntQuery(req.query.page, 1);
-      const limit = Math.min(
-        parsePositiveIntQuery(req.query.limit, DEFAULT_MEDIA_LIMIT),
-        MAX_MEDIA_LIMIT,
+      const mediaItems = await mediaService.listAll(kind);
+      return sendSuccess(
+        res,
+        200,
+        "Media list fetched successfully.",
+        mediaItems.map(toMediaResponseDto),
       );
-
-      const result = await mediaService.list(page, limit, kind);
-
-      // Shaped like the other paginated endpoints ({ items, pagination }) so
-      // the picker and the library page consume it the same way.
-      return sendSuccess(res, 200, "Media list fetched successfully.", {
-        items: result.items.map(toMediaResponseDto),
-        pagination: {
-          page: result.page,
-          limit: result.limit,
-          total: result.total,
-          totalPages: Math.ceil(result.total / result.limit),
-        },
-      });
     } catch (error: unknown) {
       return next(error);
     }
@@ -151,18 +125,6 @@ class MediaController {
   ) {
     try {
       await mediaService.deleteById(req.params.id);
-
-      const { ip, userAgent } = auditContext(req);
-      await recordAudit({
-        action: "media.delete",
-        outcome: "success",
-        actorId: req.user?.id ?? null,
-        targetType: "media",
-        targetId: req.params.id,
-        ip,
-        userAgent,
-      });
-
       return res.status(204).send();
     } catch (error: unknown) {
       return next(error);
