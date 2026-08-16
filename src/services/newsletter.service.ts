@@ -11,7 +11,7 @@ import {
   toSubscriberResponse,
 } from "@dto/subscriber.dto";
 import { PaginatedResponse } from "@dto/pagination.dto";
-import { GoneError, NotFoundError, ValidationError } from "@errors/http-error";
+import { NotFoundError, ValidationError } from "@errors/http-error";
 import { NewsletterLogStatus } from "@models/newsletter-log.model";
 import { PostStatus } from "@models/post.model";
 import { Subscriber, SubscriberStatus } from "@models/subscriber.model";
@@ -133,9 +133,6 @@ export class NewsletterService implements NewsletterJobWorker {
               {
                 email,
                 status: SubscriberStatus.ACTIVE,
-                verificationToken: null,
-                verificationTokenExpiresAt: null,
-                verifiedAt: new Date(),
                 unsubscribeToken,
               },
               transaction,
@@ -157,33 +154,6 @@ export class NewsletterService implements NewsletterJobWorker {
     }
   }
 
-  async verify(token: string): Promise<SubscriberResponse> {
-    const subscriber = await this.subscribers.findByVerificationToken(token);
-    if (!subscriber) {
-      throw new NotFoundError("Verification token not found.");
-    }
-
-    if (
-      subscriber.verificationTokenExpiresAt &&
-      subscriber.verificationTokenExpiresAt < new Date()
-    ) {
-      throw new GoneError(
-        "Verification link has expired. Please subscribe again to receive a new link.",
-      );
-    }
-
-    subscriber.status = SubscriberStatus.ACTIVE;
-    subscriber.verifiedAt = new Date();
-    subscriber.verificationToken = null;
-    subscriber.verificationTokenExpiresAt = null;
-
-    if (!subscriber.unsubscribeToken) {
-      subscriber.unsubscribeToken = createToken();
-    }
-
-    return toSubscriberResponse(await this.subscribers.save(subscriber));
-  }
-
   async getByUnsubscribeToken(
     token: string,
   ): Promise<PublicSubscriberStatusResponse> {
@@ -202,7 +172,6 @@ export class NewsletterService implements NewsletterJobWorker {
     }
 
     subscriber.status = SubscriberStatus.UNSUBSCRIBED;
-    subscriber.verificationToken = null;
 
     return toPublicSubscriberStatusResponse(
       await this.subscribers.save(subscriber),
@@ -222,14 +191,13 @@ export class NewsletterService implements NewsletterJobWorker {
   }
 
   async stats(): Promise<SubscriberStatsResponse> {
-    const [total, pending, active, unsubscribed] = await Promise.all([
+    const [total, active, unsubscribed] = await Promise.all([
       this.subscribers.count(),
-      this.subscribers.count(SubscriberStatus.PENDING),
       this.subscribers.count(SubscriberStatus.ACTIVE),
       this.subscribers.count(SubscriberStatus.UNSUBSCRIBED),
     ]);
 
-    return { total, pending, active, unsubscribed };
+    return { total, active, unsubscribed };
   }
 
   async schedulePostPublished(
@@ -334,10 +302,7 @@ export class NewsletterService implements NewsletterJobWorker {
     }
 
     subscriber.status = SubscriberStatus.ACTIVE;
-    subscriber.verificationToken = null;
-    subscriber.verificationTokenExpiresAt = null;
     subscriber.unsubscribeToken = unsubscribeToken;
-    subscriber.verifiedAt = subscriber.verifiedAt ?? new Date();
 
     return this.subscribers.save(subscriber, transaction);
   }

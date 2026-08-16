@@ -161,8 +161,6 @@ describe("newsletter unsubscribe flow", () => {
 
     const persisted = await Subscriber.findByPk(subscribed.id);
     assert.equal(persisted?.status, SubscriberStatus.ACTIVE);
-    assert.equal(persisted?.verificationToken, null);
-    assert.notEqual(persisted?.verifiedAt, null);
     assert.ok(persisted?.unsubscribeToken);
   });
 

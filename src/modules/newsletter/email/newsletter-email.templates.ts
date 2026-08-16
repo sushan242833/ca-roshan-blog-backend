@@ -1,11 +1,5 @@
 import { SendEmailPayload } from "./email-provider.interface";
 
-export interface VerificationEmailTemplateData {
-  email: string;
-  verificationUrl: string;
-  unsubscribeUrl: string;
-}
-
 export interface PostNewsletterTemplateData {
   email: string;
   postTitle: string;
@@ -23,7 +17,11 @@ export function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function baseLayout(title: string, body: string, unsubscribeUrl: string): string {
+function baseLayout(
+  title: string,
+  body: string,
+  unsubscribeUrl: string,
+): string {
   return `
     <!doctype html>
     <html lang="en">
@@ -66,55 +64,6 @@ function button(label: string, href: string): string {
   `;
 }
 
-export function buildVerificationEmail(
-  data: VerificationEmailTemplateData,
-): SendEmailPayload {
-  const html = baseLayout(
-    "Verify your subscription",
-    `
-      <p style="font-size:16px;line-height:1.7;margin:0 0 16px;color:#111827;">Hello,</p>
-      <p style="font-size:16px;line-height:1.7;margin:0;color:#374151;">
-        A subscription request was received for this email address on Roshan Blog.
-      </p>
-      <p style="font-size:16px;line-height:1.7;margin:16px 0 0;color:#374151;">
-        Confirm that you want to receive new post updates by clicking the button below.
-        This link expires in <strong>24 hours</strong>.
-      </p>
-      ${button("Verify Subscription", data.verificationUrl)}
-      <p style="font-size:16px;line-height:1.7;margin:0 0 16px;color:#374151;">
-        If you did not request this, no action is needed.
-      </p>
-      <p style="font-size:16px;line-height:1.7;margin:0;color:#374151;">
-        Regards,<br />
-        Roshan Blog
-      </p>
-    `,
-    data.unsubscribeUrl,
-  );
-
-  return {
-    to: data.email,
-    subject: "Confirm your Roshan Blog subscription",
-    html,
-    text: [
-      "Hello,",
-      "",
-      "A subscription request was received for this email address on Roshan Blog.",
-      "",
-      "Confirm that you want to receive new post updates by clicking the link below. This link expires in 24 hours.",
-      "",
-      `Verify Subscription: ${data.verificationUrl}`,
-      "",
-      "If you did not request this, no action is needed.",
-      "",
-      "Regards,",
-      "Roshan Blog",
-      "",
-      `Unsubscribe: ${data.unsubscribeUrl}`,
-    ].join("\n"),
-  };
-}
-
 export function buildPostNewsletterEmail(
   data: PostNewsletterTemplateData,
 ): SendEmailPayload {
@@ -136,6 +85,7 @@ export function buildPostNewsletterEmail(
     to: data.email,
     subject: data.postTitle,
     html,
+    unsubscribeUrl: data.unsubscribeUrl,
     text: [
       data.postTitle,
       "",

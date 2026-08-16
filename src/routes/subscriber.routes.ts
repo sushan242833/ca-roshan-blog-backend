@@ -9,7 +9,7 @@ import {
   EmptyRequestBody,
   EmptyRequestParams,
   SubscribeRequest,
-  VerifySubscriberRequest,
+  SubscriberTokenRequest,
 } from "@app-types/http.requests";
 
 const router = Router();
@@ -19,17 +19,12 @@ router.post<EmptyRequestParams, unknown, SubscribeRequest>(
   validateCreateSubscriber,
   controller.createSubscriber,
 );
-router.get<VerifySubscriberRequest, unknown, EmptyRequestBody>(
-  "/verify/:token",
-  validateSubscriberToken,
-  controller.verifySubscriber,
-);
-router.get<VerifySubscriberRequest, unknown, EmptyRequestBody>(
+router.get<SubscriberTokenRequest, unknown, EmptyRequestBody>(
   "/unsubscribe/:token",
   validateSubscriberToken,
   controller.getUnsubscribeStatus,
 );
-router.post<VerifySubscriberRequest, unknown, EmptyRequestBody>(
+router.post<SubscriberTokenRequest, unknown, EmptyRequestBody>(
   "/unsubscribe/:token",
   validateSubscriberToken,
   controller.unsubscribeSubscriber,
