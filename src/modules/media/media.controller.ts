@@ -23,11 +23,13 @@ interface MediaResponseDto {
   size: number;
   url: string;
   provider: string;
+  /** Referenced by a post or the author profile, so it cannot be deleted. */
+  inUse: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
 
-function toMediaResponseDto(media: Media): MediaResponseDto {
+function toMediaResponseDto(media: Media, inUse: boolean): MediaResponseDto {
   return {
     id: media.id,
     fileName: media.fileName,
@@ -37,6 +39,7 @@ function toMediaResponseDto(media: Media): MediaResponseDto {
     size: media.size,
     url: media.url,
     provider: media.provider,
+    inUse,
     createdAt: media.createdAt,
     updatedAt: media.updatedAt,
   };
@@ -74,7 +77,8 @@ class MediaController {
         res,
         201,
         "Media uploaded successfully.",
-        toMediaResponseDto(media),
+        // Nothing can reference a file that did not exist a moment ago.
+        toMediaResponseDto(media, false),
       );
     } catch (error: unknown) {
       return next(error);
@@ -93,7 +97,7 @@ class MediaController {
         res,
         200,
         "Media list fetched successfully.",
-        mediaItems.map(toMediaResponseDto),
+        mediaItems.map((item) => toMediaResponseDto(item.media, item.inUse)),
       );
     } catch (error: unknown) {
       return next(error);
@@ -106,13 +110,30 @@ class MediaController {
     next: NextFunction,
   ) {
     try {
-      const media = await mediaService.getById(req.params.id);
+      const { media, inUse } = await mediaService.getByIdWithUsage(
+        req.params.id,
+      );
       return sendSuccess(
         res,
         200,
         "Media fetched successfully.",
-        toMediaResponseDto(media),
+        toMediaResponseDto(media, inUse),
       );
+    } catch (error: unknown) {
+      return next(error);
+    }
+  }
+
+  // Lets the admin UI show whether a file is deletable before offering the
+  // action, instead of relying on the 409 that DELETE would return.
+  async getUsageById(
+    req: Request<IdRequestParams, unknown, EmptyRequestBody>,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const usage = await mediaService.getUsage(req.params.id);
+      return sendSuccess(res, 200, "Media usage fetched successfully.", usage);
     } catch (error: unknown) {
       return next(error);
     }

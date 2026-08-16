@@ -4,8 +4,10 @@ import { env } from "@config/env";
 import {
   CreateSubscriberDto,
   SubscriberListFilters,
+  PublicSubscriberStatusResponse,
   SubscriberResponse,
   SubscriberStatsResponse,
+  toPublicSubscriberStatusResponse,
   toSubscriberResponse,
 } from "@dto/subscriber.dto";
 import { PaginatedResponse } from "@dto/pagination.dto";
@@ -207,16 +209,18 @@ export class NewsletterService implements NewsletterJobWorker {
     return toSubscriberResponse(await this.subscribers.save(subscriber));
   }
 
-  async getByUnsubscribeToken(token: string): Promise<SubscriberResponse> {
+  async getByUnsubscribeToken(
+    token: string,
+  ): Promise<PublicSubscriberStatusResponse> {
     const subscriber = await this.subscribers.findByUnsubscribeToken(token);
     if (!subscriber) {
       throw new NotFoundError("Unsubscribe token not found.");
     }
 
-    return toSubscriberResponse(subscriber);
+    return toPublicSubscriberStatusResponse(subscriber);
   }
 
-  async unsubscribe(token: string): Promise<SubscriberResponse> {
+  async unsubscribe(token: string): Promise<PublicSubscriberStatusResponse> {
     const subscriber = await this.subscribers.findByUnsubscribeToken(token);
     if (!subscriber) {
       throw new NotFoundError("Unsubscribe token not found.");
@@ -225,7 +229,9 @@ export class NewsletterService implements NewsletterJobWorker {
     subscriber.status = SubscriberStatus.UNSUBSCRIBED;
     subscriber.verificationToken = null;
 
-    return toSubscriberResponse(await this.subscribers.save(subscriber));
+    return toPublicSubscriberStatusResponse(
+      await this.subscribers.save(subscriber),
+    );
   }
 
   async adminList(
@@ -398,8 +404,8 @@ export class NewsletterService implements NewsletterJobWorker {
         `/blogs/${encodeURIComponent(postSlug)}`,
       ),
       unsubscribeUrl: buildUrl(
-        env.API_BASE_URL,
-        `/api/v1/subscribers/unsubscribe/${encodeURIComponent(unsubscribeToken)}`,
+        env.APP_BASE_URL,
+        `/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`,
       ),
     });
   }

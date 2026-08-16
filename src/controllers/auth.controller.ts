@@ -1,10 +1,12 @@
 import { Request, Response, NextFunction } from "express";
 import authService from "@services/auth.service";
 import {
+  ChangePasswordRequest,
   EmptyRequestBody,
   EmptyRequestParams,
   LoginRequest,
 } from "@app-types/http.requests";
+import { auditContext, recordAudit } from "@utils/audit";
 
 const COOKIE_NAME = "refreshToken";
 
@@ -29,10 +31,31 @@ export async function login(
   try {
     const { email, password } = req.body;
     const result = await authService.login(email, password);
-    if (!result)
+    const { ip, userAgent } = auditContext(req);
+
+    if (!result) {
+      // No actor: the attempt failed, so there is no authenticated identity to
+      // attribute it to. The submitted email is deliberately not recorded.
+      await recordAudit({
+        action: "auth.login",
+        outcome: "failure",
+        ip,
+        userAgent,
+      });
       return res
         .status(401)
         .json({ success: false, message: "Invalid credentials" });
+    }
+
+    await recordAudit({
+      action: "auth.login",
+      outcome: "success",
+      actorId: result.admin.id,
+      targetType: "admin",
+      targetId: result.admin.id,
+      ip,
+      userAgent,
+    });
 
     const { accessToken, refreshToken } = result.tokens;
 
@@ -59,6 +82,18 @@ export async function logout(
     const admin = req.user;
     if (!admin) return res.status(200).json({ success: true });
     await authService.logout(admin.id);
+
+    const { ip, userAgent } = auditContext(req);
+    await recordAudit({
+      action: "auth.logout",
+      outcome: "success",
+      actorId: admin.id,
+      targetType: "admin",
+      targetId: admin.id,
+      ip,
+      userAgent,
+    });
+
     res.clearCookie(COOKIE_NAME, REFRESH_COOKIE_OPTIONS);
     return res.json({ success: true });
   } catch (err) {
@@ -113,4 +148,38 @@ export async function me(
   }
 }
 
-export default { login, logout, refresh, me };
+export async function changePassword(
+  req: Request<EmptyRequestParams, unknown, ChangePasswordRequest>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const admin = req.user;
+    if (!admin)
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+
+    const { currentPassword, newPassword } = req.body;
+    await authService.changePassword(admin.id, currentPassword, newPassword);
+
+    const { ip, userAgent } = auditContext(req);
+    await recordAudit({
+      action: "auth.password_change",
+      outcome: "success",
+      actorId: admin.id,
+      targetType: "admin",
+      targetId: admin.id,
+      ip,
+      userAgent,
+    });
+
+    // The password change revoked every refresh token, so the cookie this
+    // client still holds is dead. Clear it rather than leave the browser
+    // retrying a token that can no longer refresh.
+    res.clearCookie(COOKIE_NAME, REFRESH_COOKIE_OPTIONS);
+    return res.json({ success: true });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export default { login, logout, refresh, me, changePassword };

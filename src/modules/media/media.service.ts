@@ -7,21 +7,34 @@ import {
   toMediaIdParamDto,
 } from "./media.dto";
 import {
+  ConflictError,
   InternalServerError,
   NotFoundError,
 } from "./media.errors";
 import { StorageProvider } from "./storage/storage-provider.interface";
 import { resolveStorage } from "./storage/storage-provider.factory";
+import mediaUsageService, {
+  MediaUsage,
+  MediaUsageService,
+  describeMediaUsage,
+} from "./media.usage";
 
 // Resolved once at module load so a bad Cloudinary config surfaces at boot
 // rather than on the first upload. Tests still inject their own provider.
 const defaultStorage = resolveStorage();
+
+// A media row plus whether anything in the project still points at it.
+export interface MediaListItem {
+  media: Media;
+  inUse: boolean;
+}
 
 export class MediaService {
   constructor(
     private readonly repository: MediaRepository = mediaRepository,
     private readonly storageProvider: StorageProvider = defaultStorage.provider,
     private readonly provider: MediaProvider = defaultStorage.mediaProvider,
+    private readonly usage: MediaUsageService = mediaUsageService,
   ) {}
 
   async upload(dto: UploadMediaDto): Promise<Media> {
@@ -51,8 +64,15 @@ export class MediaService {
     }
   }
 
-  async listAll(kind?: MediaKind): Promise<Media[]> {
-    return this.repository.findAll(kind);
+  // The listing carries the in-use flag so the library can mark (and protect)
+  // referenced files without asking about each one separately.
+  async listAll(kind?: MediaKind): Promise<MediaListItem[]> {
+    const [items, usageIndex] = await Promise.all([
+      this.repository.findAll(kind),
+      this.usage.buildIndex(),
+    ]);
+
+    return items.map((media) => ({ media, inUse: usageIndex.isUsed(media) }));
   }
 
   async getById(id: string): Promise<Media> {
@@ -66,8 +86,32 @@ export class MediaService {
     return media;
   }
 
+  async getByIdWithUsage(id: string): Promise<MediaListItem> {
+    const media = await this.getById(id);
+    const usage = await this.usage.find(media);
+
+    return { media, inUse: usage.inUse };
+  }
+
+  async getUsage(id: string): Promise<MediaUsage> {
+    const media = await this.getById(id);
+    return this.usage.find(media);
+  }
+
+  // Deleting is only allowed for a file nothing points at. Media referenced by
+  // a post — published, draft, archived, or trashed — stays put, because the
+  // delete is destructive: the underlying file leaves storage and the post that
+  // used it would render a broken image with no way back.
   async deleteById(id: string): Promise<void> {
     const media = await this.getById(id);
+    const usage = await this.usage.find(media);
+
+    if (usage.inUse) {
+      throw new ConflictError(
+        `“${media.originalName}” is in use and cannot be deleted. It is used by ${describeMediaUsage(usage)}. Remove it there first, then delete it here.`,
+        usage,
+      );
+    }
 
     await this.storageProvider.delete(media.fileName);
     const deleted = await this.repository.softDeleteById(media.id);

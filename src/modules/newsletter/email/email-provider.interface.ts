@@ -3,6 +3,7 @@ export interface SendEmailPayload {
   subject: string;
   html: string;
   text: string;
+  replyTo?: string;
 }
 
 export interface EmailProvider {

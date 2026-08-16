@@ -1,6 +1,5 @@
+import { randomBytes } from "crypto";
 import { Transaction } from "sequelize";
-import jwt from "jsonwebtoken";
-import { env } from "@config/env";
 import { CreatePostDto } from "@dto/create-post.dto";
 import { PaginatedResponse } from "@dto/pagination.dto";
 import {
@@ -30,11 +29,18 @@ import postRepository, {
   PostRepository,
 } from "@repositories/post.repository";
 import { regeneratePostChapters } from "@services/post-chapter.service";
+import { sanitizeArticleHtml } from "@utils/sanitize-content";
+import { hashToken } from "@utils/token-hash";
 import { slugify } from "@utils/index";
 
 const WORDS_PER_MINUTE = 200;
 const MAX_META_TITLE_LENGTH = 60;
 const MAX_META_DESCRIPTION_LENGTH = 160;
+
+// 256 bits of entropy, hex-encoded into a 64-character URL segment. Guessing
+// one is not a threat model, which is why the token needs no signature.
+const PREVIEW_TOKEN_BYTES = 32;
+const PREVIEW_TOKEN_TTL_MS = 60 * 60 * 1000;
 
 function normalizeRequiredString(value: string, field: string): string {
   const normalized = value.trim();
@@ -44,7 +50,9 @@ function normalizeRequiredString(value: string, field: string): string {
   return normalized;
 }
 
-function normalizeOptionalString(value: string | null | undefined): string | null {
+function normalizeOptionalString(
+  value: string | null | undefined,
+): string | null {
   if (typeof value !== "string") {
     return null;
   }
@@ -133,7 +141,30 @@ function applyStatus(post: Post, status: PostStatus): void {
   }
 }
 
-function validateSeo(metaTitle: string | null, metaDescription: string | null): void {
+function truncateForSeo(value: string, max: number): string {
+  if (value.length <= max) {
+    return value;
+  }
+
+  const cut = value.slice(0, max - 1);
+  const lastSpace = cut.lastIndexOf(" ");
+
+  const trimmed = lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut;
+  return `${trimmed.trimEnd()}…`;
+}
+
+function deriveMetaTitle(title: string): string {
+  return truncateForSeo(title, MAX_META_TITLE_LENGTH);
+}
+
+function deriveMetaDescription(excerpt: string | null): string {
+  return truncateForSeo(excerpt ?? "", MAX_META_DESCRIPTION_LENGTH);
+}
+
+function validateSeo(
+  metaTitle: string | null,
+  metaDescription: string | null,
+): void {
   const errors: ValidationIssue[] = [];
 
   if (metaTitle && metaTitle.length > MAX_META_TITLE_LENGTH) {
@@ -201,18 +232,27 @@ export class PostService {
   ): Promise<PostDetailResponse> {
     return this.repository.transaction(async (transaction) => {
       const title = normalizeRequiredString(dto.title, "title");
-      const content = normalizeRequiredString(dto.content, "content");
+      // Sanitised before anything derives from it, so excerpt, searchText,
+      // readingTime and the chapter split all come from the stored copy.
+      const content = sanitizeArticleHtml(
+        normalizeRequiredString(dto.content, "content"),
+      );
       const excerpt = normalizeExcerpt(dto.excerpt) ?? createExcerpt(content);
-      const metaTitle = normalizeOptionalString(dto.metaTitle) ?? title;
-      const metaDescription =
-        normalizeOptionalString(dto.metaDescription) ?? excerpt;
+      const explicitMetaTitle = normalizeOptionalString(dto.metaTitle);
+      const explicitMetaDescription = normalizeOptionalString(
+        dto.metaDescription,
+      );
       const pdfUrl = normalizeOptionalString(dto.pdfUrl);
       const pdfLabel = normalizeOptionalString(dto.pdfLabel);
       const status = resolveCreateStatus(dto);
       const categoryIds = uniqueValues(dto.categoryIds);
       const tagIds = uniqueValues(dto.tagIds);
 
-      validateSeo(metaTitle, metaDescription);
+      validateSeo(explicitMetaTitle, explicitMetaDescription);
+
+      const metaTitle = explicitMetaTitle ?? deriveMetaTitle(title);
+      const metaDescription =
+        explicitMetaDescription ?? deriveMetaDescription(excerpt);
       await this.assertFeaturedImageExists(dto.featuredImageId, transaction);
       await this.assertCategoryExists(dto.categoryId, transaction);
       await this.assertTaxonomyIdsExist(categoryIds, tagIds, transaction);
@@ -244,7 +284,11 @@ export class PostService {
       };
 
       const post = await this.repository.create(payload, transaction);
-      await this.repository.replaceCategories(post.id, categoryIds, transaction);
+      await this.repository.replaceCategories(
+        post.id,
+        categoryIds,
+        transaction,
+      );
       await this.repository.replaceTags(post.id, tagIds, transaction);
 
       // Same transaction as the body it derives from, so the persisted split
@@ -274,24 +318,40 @@ export class PostService {
       }
 
       const previousStatus = post.status;
-      const metaTitleWasFallback = !post.metaTitle || post.metaTitle === post.title;
+
+      const metaTitleWasFallback =
+        !post.metaTitle ||
+        post.metaTitle === post.title ||
+        post.metaTitle === deriveMetaTitle(post.title);
       const metaDescriptionWasFallback =
-        !post.metaDescription || post.metaDescription === (post.excerpt ?? "");
+        !post.metaDescription ||
+        post.metaDescription === (post.excerpt ?? "") ||
+        post.metaDescription === deriveMetaDescription(post.excerpt ?? null);
 
       if (typeof dto.title !== "undefined") {
         const title = normalizeRequiredString(dto.title, "title");
         if (title !== post.title && typeof dto.slug === "undefined") {
-          post.slug = await this.generateUniqueSlug(title, post.id, transaction);
+          post.slug = await this.generateUniqueSlug(
+            title,
+            post.id,
+            transaction,
+          );
         }
         post.title = title;
       }
 
       if (typeof dto.slug !== "undefined") {
-        post.slug = await this.generateUniqueSlug(dto.slug, post.id, transaction);
+        post.slug = await this.generateUniqueSlug(
+          dto.slug,
+          post.id,
+          transaction,
+        );
       }
 
       if (typeof dto.content !== "undefined") {
-        post.content = normalizeRequiredString(dto.content, "content");
+        post.content = sanitizeArticleHtml(
+          normalizeRequiredString(dto.content, "content"),
+        );
         post.readingTime = calculateReadingTime(post.content);
         post.searchText = stripHtml(post.content);
 
@@ -323,20 +383,30 @@ export class PostService {
         applyStatus(post, nextStatus);
       }
 
+      const explicitMetaTitle =
+        typeof dto.metaTitle !== "undefined"
+          ? normalizeOptionalString(dto.metaTitle)
+          : undefined;
+      const explicitMetaDescription =
+        typeof dto.metaDescription !== "undefined"
+          ? normalizeOptionalString(dto.metaDescription)
+          : undefined;
+
+      validateSeo(explicitMetaTitle ?? null, explicitMetaDescription ?? null);
+
       if (typeof dto.metaTitle !== "undefined") {
-        post.metaTitle = normalizeOptionalString(dto.metaTitle) ?? post.title;
+        post.metaTitle = explicitMetaTitle ?? deriveMetaTitle(post.title);
       } else if (metaTitleWasFallback) {
-        post.metaTitle = post.title;
+        post.metaTitle = deriveMetaTitle(post.title);
       }
 
       if (typeof dto.metaDescription !== "undefined") {
         post.metaDescription =
-          normalizeOptionalString(dto.metaDescription) ?? (post.excerpt ?? "");
+          explicitMetaDescription ??
+          deriveMetaDescription(post.excerpt ?? null);
       } else if (metaDescriptionWasFallback) {
-        post.metaDescription = post.excerpt ?? "";
+        post.metaDescription = deriveMetaDescription(post.excerpt ?? null);
       }
-
-      validateSeo(post.metaTitle ?? null, post.metaDescription ?? null);
 
       // Sending null (or an empty string) clears the PDF; undefined leaves it
       // untouched, mirroring how the optional SEO fields flow through above.
@@ -355,7 +425,11 @@ export class PostService {
       if (dto.categoryIds) {
         const categoryIds = uniqueValues(dto.categoryIds);
         await this.assertTaxonomyIdsExist(categoryIds, undefined, transaction);
-        await this.repository.replaceCategories(post.id, categoryIds, transaction);
+        await this.repository.replaceCategories(
+          post.id,
+          categoryIds,
+          transaction,
+        );
       }
 
       if (dto.tagIds) {
@@ -483,53 +557,45 @@ export class PostService {
     return { totalPosts, published, drafts, archived };
   }
 
+  /**
+   * Mints a preview link for a post of any status. The token is opaque random
+   * bytes, not a signed claim: it carries no key of the application's, so a
+   * leaked preview link is worth exactly one draft rather than being one
+   * forgotten `type` check away from an admin session. Only its digest is
+   * stored, and a new call replaces the previous link.
+   */
   async generatePreviewToken(postId: string): Promise<{
     token: string;
     expiresAt: Date;
   }> {
-    // Verify the post exists (published or draft, not soft-deleted)
-    const post = await Post.findByPk(postId, { paranoid: true });
-    if (!post) throw new NotFoundError("Post not found.");
+    const token = randomBytes(PREVIEW_TOKEN_BYTES).toString("hex");
+    const expiresAt = new Date(Date.now() + PREVIEW_TOKEN_TTL_MS);
 
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 60 minutes
-
-    const token = jwt.sign(
-      { sub: postId, type: "preview" },
-      env.JWT_SECRET,
-      { expiresIn: "1h", algorithm: "HS256" },
+    // The update doubles as the existence check (published or draft, not
+    // soft-deleted), so there is no separate lookup to race against.
+    const updated = await this.repository.setPreviewToken(
+      postId,
+      hashToken(token),
+      expiresAt,
     );
+    if (!updated) throw new NotFoundError("Post not found.");
 
     return { token, expiresAt };
   }
 
   /**
-   * Verifies a preview token and returns the post it points at, whatever its
+   * Resolves a preview token to the post it was minted for, whatever its
    * status. Shared by the single-page preview response below and the chapter
    * preview endpoints (chapter.service), so the token rules live in one place.
+   *
+   * Unknown, expired and revoked tokens are one case with one message: the
+   * response must not reveal which.
    */
   async resolvePreviewPost(token: string): Promise<Post> {
-    let payload: { sub: string; type: string };
-
-    try {
-      payload = jwt.verify(token, env.JWT_SECRET, {
-        algorithms: ["HS256"],
-      }) as {
-        sub: string;
-        type: string;
-      };
-    } catch {
+    const post = await this.repository.findByPreviewTokenHash(hashToken(token));
+    if (!post) {
       throw new UnauthorizedError("Preview link is invalid or has expired.");
     }
-
-    if (payload.type !== "preview") {
-      throw new UnauthorizedError("Invalid preview token.");
-    }
-
-    // Fetch the post regardless of status (draft or published)
-    const post = await this.repository.findById(payload.sub, {
-      withAssociations: true,
-    });
-    if (!post) throw new NotFoundError("Post not found.");
 
     return post;
   }

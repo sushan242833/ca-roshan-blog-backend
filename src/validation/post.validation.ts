@@ -1,5 +1,9 @@
 import { Request, Response, NextFunction } from "express";
-import { NotFoundError, ValidationError, ValidationIssue } from "@errors/http-error";
+import {
+  NotFoundError,
+  ValidationError,
+  ValidationIssue,
+} from "@errors/http-error";
 import { PostStatus } from "@models/post.model";
 import { EmptyRequestParams, IdRequestParams } from "@app-types/http.requests";
 
@@ -7,13 +11,12 @@ const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_META_TITLE_LENGTH = 60;
 const MAX_META_DESCRIPTION_LENGTH = 160;
+
+const MAX_TITLE_LENGTH = 255;
+const MAX_SLUG_LENGTH = 255;
 const MAX_PDF_URL_LENGTH = 2048;
 const MAX_PDF_LABEL_LENGTH = 255;
 
-// A PDF link is either an absolute http(s) URL (external hosting) or a
-// relative path served from our own /uploads/ static route (self-hosted
-// media). Anything else — javascript:, data:, other schemes, arbitrary
-// paths — is rejected so the value can be rendered as a plain href safely.
 function isValidPdfUrl(value: string): boolean {
   if (value.startsWith("/uploads/")) {
     return true;
@@ -120,6 +123,31 @@ function validateStatus(
   }
 }
 
+function validateContentLengths(
+  body: Record<string, unknown>,
+  errors: ValidationIssue[],
+): void {
+  if (
+    typeof body.title === "string" &&
+    body.title.trim().length > MAX_TITLE_LENGTH
+  ) {
+    errors.push({
+      field: "title",
+      message: `title must be ${MAX_TITLE_LENGTH} characters or fewer.`,
+    });
+  }
+
+  if (
+    typeof body.slug === "string" &&
+    body.slug.trim().length > MAX_SLUG_LENGTH
+  ) {
+    errors.push({
+      field: "slug",
+      message: `slug must be ${MAX_SLUG_LENGTH} characters or fewer.`,
+    });
+  }
+}
+
 function validateSeoLengths(
   body: Record<string, unknown>,
   errors: ValidationIssue[],
@@ -191,11 +219,15 @@ function validatePostBody(
 
   if (!isRecord(body)) {
     return next(
-      new ValidationError([{ field: "body", message: "Request body is required." }]),
+      new ValidationError([
+        { field: "body", message: "Request body is required." },
+      ]),
     );
   }
 
-  requiredFields.forEach((field) => validateRequiredString(body, field, errors));
+  requiredFields.forEach((field) =>
+    validateRequiredString(body, field, errors),
+  );
   [
     "title",
     "content",
@@ -212,6 +244,7 @@ function validatePostBody(
   validateOptionalBoolean(body, "published", errors);
   validateOptionalBoolean(body, "showFeaturedImage", errors);
   validateStatus(body, errors);
+  validateContentLengths(body, errors);
   validateSeoLengths(body, errors);
   validatePdfFields(body, errors);
 

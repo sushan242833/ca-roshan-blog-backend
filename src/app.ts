@@ -6,6 +6,7 @@ import cookieParser from "cookie-parser";
 import morgan from "morgan";
 import compression from "compression";
 import rateLimit from "express-rate-limit";
+import { loginLimiter } from "@middleware/rate-limit";
 import path from "path";
 import { env } from "@config/env";
 import sequelize from "@config/config";
@@ -87,8 +88,8 @@ const isTestEnv = env.NODE_ENV === "test";
 // trip it.
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: isTestEnv ? 1_000_000 : 300,
-  standardHeaders: true,
+  limit: isTestEnv ? 1_000_000 : 300,
+  standardHeaders: "draft-7",
   legacyHeaders: false,
   handler: rateLimitHandler(
     "Too many requests. Please slow down and try again shortly.",
@@ -98,22 +99,13 @@ const generalLimiter = rateLimit({
 // Search is deliberately much tighter and applies only to search requests.
 const searchLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: isTestEnv ? 1_000_000 : 30,
-  standardHeaders: true,
+  limit: isTestEnv ? 1_000_000 : 30,
+  standardHeaders: "draft-7",
   legacyHeaders: false,
   skip: (req) => !hasSearchQuery(req),
   handler: rateLimitHandler(
     "Too many searches. Please wait a moment and try again.",
   ),
-});
-
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: isTestEnv ? 1_000_000 : 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipSuccessfulRequests: true,
-  handler: rateLimitHandler("Too many login attempts. Please try again later."),
 });
 
 // General limiter covers all API routes; the search limiter is layered on the

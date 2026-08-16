@@ -21,6 +21,46 @@ npm run dev
 
 This scaffold uses path aliases defined in `tsconfig.json`. The dev script uses `ts-node-dev` with `tsconfig-paths` to resolve the aliases at runtime.
 
+## Deployment
+
+Deployment is three ordered steps. The middle one is not optional:
+
+```bash
+npm run deploy:build     # npm ci && npm run build && npm prune --omit=dev
+npm run deploy:release    # run pending migrations — MUST succeed before start
+npm start
+```
+
+`render.yaml` wires this up as `buildCommand` / `preDeployCommand` /
+`startCommand`. Render runs `preDeployCommand` after the build and before any
+new instance serves traffic; a non-zero exit fails the deploy and the previous
+version keeps running.
+
+**Migrations are not run on application boot, deliberately.** With more than one
+instance, every instance would race to migrate at startup, and a failing
+migration would leave the app serving against a schema it does not match rather
+than failing the deploy. `deploy:release` is a single release step that exits
+non-zero on failure, and additionally takes a Postgres advisory lock so two
+concurrent migrators queue instead of interleaving DDL.
+
+`preDeployCommand` requires a paid Render instance type. On the free tier, run
+`npm run deploy:release` from the Render Shell after the build and before
+promoting the deploy — the same ordering, performed by hand.
+
+`npm ci --omit=dev` on its own is **not** a valid deploy step for this project: `tsc`
+lives in `devDependencies`, so a production-only install has nothing to compile
+`dist/` with. The `deploy:build` script installs the full tree, compiles, and then
+prunes — leaving `node_modules` free of TypeScript, supertest, sequelize-cli and
+ts-node-dev while `dist/` is already built.
+
+If your platform builds and runs in separate images (multi-stage Docker), compile in
+the build stage and run `npm ci --omit=dev` in the runtime stage, copying `dist/` across.
+
+Note that `tsconfig-paths` is a **runtime** dependency, not a dev one: `npm start`
+loads `dist/register-paths.js`, which requires it to resolve the `@config/*`-style
+path aliases. Moving it back into `devDependencies` will make a pruned production
+install crash on boot.
+
 ## Feature flags
 
 Flags follow the `FEATURE_FLAG_*` convention: the string `"1"` (or `"true"`) turns a feature **on**; `"0"` or an unset variable turns it **off**. The default when unset is always **off**, so forgetting the variable hides the feature rather than exposing it.

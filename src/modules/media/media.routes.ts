@@ -20,6 +20,11 @@ router.get<EmptyRequestParams, unknown, EmptyRequestBody>("/", authMiddleware, (
   mediaController.listAll(req, res, next),
 );
 router.get<IdRequestParams, unknown, EmptyRequestBody>(
+  "/:id/usage",
+  authMiddleware,
+  (req, res, next) => mediaController.getUsageById(req, res, next),
+);
+router.get<IdRequestParams, unknown, EmptyRequestBody>(
   "/:id",
   authMiddleware,
   (req, res, next) => mediaController.getById(req, res, next),

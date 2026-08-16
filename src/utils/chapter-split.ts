@@ -85,9 +85,9 @@ function capTitle(title: string): string {
 // a 200-character prefix collapse to the same base and are then separated by the
 // suffix loop, exactly as two identical short headings already are.
 function boundedIdBase(title: string): string {
-  const slug = slugify(title);
+  const slug = slugify(title, "chapter");
   if (slug.length <= MAX_ID_BASE_LENGTH) {
-    return slug || "chapter";
+    return slug;
   }
 
   const cut = slug.slice(0, MAX_ID_BASE_LENGTH);

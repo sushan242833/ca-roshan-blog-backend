@@ -69,6 +69,12 @@ export interface PostAttributes {
   // Set once, the first time this post's newsletter is dispatched, so it is
   // never sent twice across publish/unpublish/republish cycles.
   newsletterSentAt?: Date | null;
+  // SHA-256 digest of the opaque preview token handed to the author, and the
+  // instant that token stops working. Only ever read in a WHERE clause — see
+  // the excluded-attribute lists in post.repository.ts, which keep the digest
+  // out of every response.
+  previewTokenHash?: string | null;
+  previewTokenExpiresAt?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
   deletedAt?: Date | null;
@@ -95,6 +101,8 @@ export type PostCreationAttributes = Optional<
   | "categoryId"
   | "publishedAt"
   | "newsletterSentAt"
+  | "previewTokenHash"
+  | "previewTokenExpiresAt"
   | "createdAt"
   | "updatedAt"
   | "deletedAt"
@@ -221,6 +229,14 @@ export class Post extends Model<PostAttributes, PostCreationAttributes> {
   @AllowNull(true)
   @Column({ type: DataType.DATE, field: "newsletter_sent_at" })
   newsletterSentAt?: Date | null;
+
+  @AllowNull(true)
+  @Column({ type: DataType.STRING(64), field: "preview_token_hash" })
+  previewTokenHash?: string | null;
+
+  @AllowNull(true)
+  @Column({ type: DataType.DATE, field: "preview_token_expires_at" })
+  previewTokenExpiresAt?: Date | null;
 
   @CreatedAt
   @Column({ field: "created_at" })

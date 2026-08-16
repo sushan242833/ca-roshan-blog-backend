@@ -24,14 +24,19 @@ function stripSslParams(url: string): string {
   }
 }
 
-// rejectUnauthorized stays false unless DB_SSL_CA supplies the provider's CA
-// certificate. The connection is encrypted either way; with a CA it is also
-// verified against it, which additionally defeats an active interceptor.
+// The server certificate is verified by default — encryption without
+// verification does not stop an active interceptor. DB_SSL_CA supplies the
+// provider's CA when it is not in the system trust store. DB_SSL_VERIFY=false
+// can waive verification only outside production/staging (e.g. a local Postgres
+// with a self-signed certificate); prod-like environments always verify.
+const isProdLike =
+  env.NODE_ENV === "production" || env.NODE_ENV === "staging";
+
 const sslOptions = env.DB_SSL
   ? {
       ssl: {
         require: true,
-        rejectUnauthorized: Boolean(env.DB_SSL_CA),
+        rejectUnauthorized: isProdLike ? true : env.DB_SSL_VERIFY !== false,
         ...(env.DB_SSL_CA ? { ca: env.DB_SSL_CA } : {}),
       },
     }

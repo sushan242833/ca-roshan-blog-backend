@@ -58,37 +58,44 @@ router.post<EmptyRequestParams, unknown, CreatePostRequest>(
 router.patch<IdRequestParams, unknown, UpdatePostRequest>(
   "/:id",
   authMiddleware,
+  validatePostIdParam,
   validateUpdatePost,
   controller.updatePost,
 );
 router.delete<IdRequestParams, unknown, EmptyRequestBody>(
   "/:id",
   authMiddleware,
+  validatePostIdParam,
   controller.deletePost,
 );
 router.post<IdRequestParams, unknown, EmptyRequestBody>(
   "/:id/publish",
   authMiddleware,
+  validatePostIdParam,
   controller.publishPost,
 );
 router.post<IdRequestParams, unknown, EmptyRequestBody>(
   "/:id/archive",
   authMiddleware,
+  validatePostIdParam,
   controller.archivePost,
 );
 router.post<IdRequestParams, unknown, EmptyRequestBody>(
   "/:id/restore",
   authMiddleware,
+  validatePostIdParam,
   controller.restorePost,
 );
 router.post<IdRequestParams, unknown, EmptyRequestBody>(
   "/:id/unpublish",
   authMiddleware,
+  validatePostIdParam,
   controller.unpublishPost,
 );
 router.post<IdRequestParams, unknown, EmptyRequestBody>(
   "/:id/preview-token",
   authMiddleware,
+  validatePostIdParam,
   controller.generatePreviewToken,
 );
 // Chapter previews, registered above the two-segment /preview/:token so the

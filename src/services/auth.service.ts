@@ -6,7 +6,11 @@ import {
 } from "@utils/jwt";
 import { hashValue, compareHash } from "@utils/bcrypt";
 import { hashToken, verifyTokenHash } from "@utils/token-hash";
-import { ConflictError, ValidationError } from "@errors/http-error";
+import {
+  ConflictError,
+  UnauthorizedError,
+  ValidationError,
+} from "@errors/http-error";
 
 const MIN_PASSWORD_LENGTH = 12;
 
@@ -31,9 +35,6 @@ interface LoginResponse {
   tokens: Tokens;
 }
 
-// GET /me mirrors the login payload: identity plus the author-byline fields
-// that post responses embed. The About page no longer reads any of this — its
-// content is static in the frontend bundle.
 export type AdminProfileResponse = AuthenticatedAdminResponse;
 
 const PROFILE_ATTRIBUTES = [
@@ -83,6 +84,33 @@ export class AuthService {
     });
   }
 
+  public async changePassword(
+    adminId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const admin = await Admin.findByPk(adminId);
+    if (!admin) throw new UnauthorizedError();
+
+    if (!(await compareHash(currentPassword, admin.passwordHash))) {
+      throw new UnauthorizedError("Current password is incorrect.");
+    }
+
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      throw new ValidationError([
+        {
+          field: "newPassword",
+          message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+        },
+      ]);
+    }
+
+    admin.passwordHash = await hashValue(newPassword);
+    admin.refreshTokenHash = null;
+    admin.sessionsInvalidatedAt = new Date();
+    await admin.save();
+  }
+
   public async login(
     email: string,
     password: string,
@@ -118,6 +146,7 @@ export class AuthService {
     const admin = await Admin.findByPk(adminId);
     if (!admin) return;
     admin.refreshTokenHash = null;
+    admin.sessionsInvalidatedAt = new Date();
     await admin.save();
   }
 

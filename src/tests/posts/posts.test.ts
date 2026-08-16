@@ -1,5 +1,8 @@
 import { after, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import jwt from "jsonwebtoken";
+import { env } from "@config/env";
+import { Post } from "@models/index";
 import { PostStatus } from "@models/post.model";
 import {
   createTestRequest,
@@ -40,6 +43,14 @@ interface PostPdfResponseBody {
     id: string;
     pdfUrl: string | null;
     pdfLabel: string | null;
+  };
+}
+
+interface PreviewTokenResponseBody {
+  success: boolean;
+  data: {
+    token: string;
+    expiresAt: string;
   };
 }
 
@@ -535,5 +546,147 @@ describe("posts", () => {
         showFeaturedImage: "yes",
       })
       .expect(400);
+  });
+
+  it("serves an unpublished draft through a generated preview link", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+    const post = await createPost({
+      adminId: admin.admin.id,
+      status: PostStatus.DRAFT,
+    });
+
+    const generated = await createTestRequest()
+      .post(`/api/v1/posts/${post.id}/preview-token`)
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .expect(200);
+    const { token } = (generated.body as PreviewTokenResponseBody).data;
+
+    // Opaque and unguessable, and carrying no claims of its own.
+    assert.match(token, /^[0-9a-f]{64}$/);
+
+    // The same draft is not reachable by its slug, which is the whole point of
+    // the link.
+    await createTestRequest().get(`/api/v1/posts/${post.slug}`).expect(404);
+
+    const previewed = await createTestRequest()
+      .get(`/api/v1/posts/preview/${token}`)
+      .expect(200);
+    const body = previewed.body as PostDetailResponseBody;
+
+    assert.equal(body.data.id, post.id);
+    assert.equal(body.data.status, PostStatus.DRAFT);
+    // The stored digest must never ride along in the response.
+    assert.equal("previewTokenHash" in body.data, false);
+    assert.equal("previewTokenExpiresAt" in body.data, false);
+  });
+
+  it("rejects an unknown preview token", async () => {
+    await createTestRequest()
+      .get(`/api/v1/posts/preview/${"a".repeat(64)}`)
+      .expect(401);
+  });
+
+  it("rejects an expired preview token", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+    const post = await createPost({ adminId: admin.admin.id });
+
+    const generated = await createTestRequest()
+      .post(`/api/v1/posts/${post.id}/preview-token`)
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .expect(200);
+    const { token } = (generated.body as PreviewTokenResponseBody).data;
+
+    await Post.update(
+      { previewTokenExpiresAt: new Date(Date.now() - 1_000) },
+      { where: { id: post.id } },
+    );
+
+    await createTestRequest()
+      .get(`/api/v1/posts/preview/${token}`)
+      .expect(401);
+  });
+
+  it("revokes the previous preview link when a new one is generated", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+    const post = await createPost({ adminId: admin.admin.id });
+
+    const first = await createTestRequest()
+      .post(`/api/v1/posts/${post.id}/preview-token`)
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .expect(200);
+    const second = await createTestRequest()
+      .post(`/api/v1/posts/${post.id}/preview-token`)
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .expect(200);
+
+    const firstToken = (first.body as PreviewTokenResponseBody).data.token;
+    const secondToken = (second.body as PreviewTokenResponseBody).data.token;
+    assert.notEqual(firstToken, secondToken);
+
+    // Regenerating is how an author withdraws a link they shared by mistake.
+    await createTestRequest()
+      .get(`/api/v1/posts/preview/${firstToken}`)
+      .expect(401);
+    await createTestRequest()
+      .get(`/api/v1/posts/preview/${secondToken}`)
+      .expect(200);
+  });
+
+  // Preview links were once JWTs signed with JWT_SECRET — the key that signs
+  // admin access tokens — and were told apart from a session only by a `type`
+  // claim. Nothing may accept a signature here any more.
+  it("rejects a JWT minted with the access-token secret as a preview token", async () => {
+    const admin = await createAdmin();
+    const post = await createPost({ adminId: admin.admin.id });
+
+    const forged = jwt.sign({ sub: post.id, type: "preview" }, env.JWT_SECRET, {
+      expiresIn: "1h",
+      algorithm: "HS256",
+    });
+
+    await createTestRequest()
+      .get(`/api/v1/posts/preview/${forged}`)
+      .expect(401);
+  });
+
+  it("serves chapter preview endpoints from the same token", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+    const post = await createPost({ adminId: admin.admin.id });
+
+    const generated = await createTestRequest()
+      .post(`/api/v1/posts/${post.id}/preview-token`)
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .expect(200);
+    const { token } = (generated.body as PreviewTokenResponseBody).data;
+
+    await createTestRequest()
+      .get(`/api/v1/posts/preview/${token}/chapters`)
+      .expect(200);
+    await createTestRequest()
+      .get(`/api/v1/posts/preview/${"b".repeat(64)}/chapters`)
+      .expect(401);
+  });
+
+  it("returns 404 when generating a preview token for a missing post", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+
+    await createTestRequest()
+      .post("/api/v1/posts/2b0a3b3e-0000-4000-8000-000000000000/preview-token")
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .expect(404);
+  });
+
+  it("requires authentication to generate a preview token", async () => {
+    const admin = await createAdmin();
+    const post = await createPost({ adminId: admin.admin.id });
+
+    await createTestRequest()
+      .post(`/api/v1/posts/${post.id}/preview-token`)
+      .expect(401);
   });
 });
