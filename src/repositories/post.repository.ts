@@ -4,6 +4,7 @@ import {
   Op,
   Order,
   OrderItem,
+  QueryTypes,
   Transaction,
   WhereOptions,
 } from "sequelize";
@@ -46,6 +47,20 @@ export interface PaginatedPosts {
   rows: Post[];
   count: number;
 }
+
+// The media a post can hold: a featured-image foreign key, plus the file-name
+// UUIDs of everything linked from the body HTML or the PDF field.
+export interface ReferencedMediaKeys {
+  featuredImageIds: string[];
+  fileNameTokens: string[];
+}
+
+// Uploads are stored as "<uuid>.<ext>" (media.dto.ts), so the UUID alone
+// identifies a file inside any URL a post embeds, whatever host or extension
+// the storage provider delivers it under. Literal — never interpolated with
+// user input — so it is safe to inline in the query below.
+const EMBEDDED_MEDIA_UUID_PATTERN =
+  "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 
 export interface FindPostOptions {
   transaction?: Transaction;
@@ -178,6 +193,13 @@ const MAX_SEARCH_TOKENS = 6;
 // AROUND the escaped output, so they stay live regex operators.
 export function escapeRegex(value: string): string {
   return value.replace(/[.\\+*?()[\]{}^$|]/g, "\\$&");
+}
+
+// Escapes the LIKE wildcards so a media file name or URL containing % or _ is
+// matched literally. Postgres treats \ as the default escape character inside
+// LIKE/ILIKE, so no ESCAPE clause is needed.
+export function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
 }
 
 // WHERE clause + ranking tiers 2/3: anchor the START of a word only. There is
@@ -672,6 +694,81 @@ export class PostRepository {
 
   async restore(post: Post, transaction: Transaction): Promise<void> {
     await post.restore({ transaction });
+  }
+
+  // Everything the posts table points at, as two round trips rather than one
+  // usage lookup per media row — this is what lets the media library flag every
+  // card as in-use in a single request. The UUIDs embedded in post bodies are
+  // extracted by Postgres, so the (large) HTML stays in the database and only
+  // the small set of referenced ids comes back.
+  async findReferencedMediaKeys(): Promise<ReferencedMediaKeys> {
+    const [featuredRows, tokenRows] = await Promise.all([
+      Post.findAll({
+        attributes: ["featuredImageId"],
+        where: { featuredImageId: { [Op.ne]: null } },
+        paranoid: false,
+        raw: true,
+      }) as Promise<Pick<PostAttributes, "featuredImageId">[]>,
+      sequelize.query<{ token: string }>(
+        `SELECT DISTINCT lower(match[1]) AS token
+         FROM posts p
+         CROSS JOIN LATERAL regexp_matches(
+           coalesce(p.content, '') || ' ' || coalesce(p.pdf_url, ''),
+           '${EMBEDDED_MEDIA_UUID_PATTERN}',
+           'gi'
+         ) AS match`,
+        { type: QueryTypes.SELECT },
+      ),
+    ]);
+
+    return {
+      featuredImageIds: featuredRows
+        .map((row) => row.featuredImageId)
+        .filter((id): id is string => Boolean(id)),
+      fileNameTokens: tokenRows.map((row) => row.token),
+    };
+  }
+
+  // Every post that still references a media item, in any status and including
+  // trashed ones — a trashed post can be restored, so the file it points at is
+  // not free to delete. `content` is matched with LIKE because inline images
+  // live in the HTML body as URLs rather than as a foreign key; `post_chapters`
+  // is deliberately not searched, since chapter rows are regenerated from
+  // `content` and can never cite media the body does not.
+  //
+  // `content` is left out of the selected columns on purpose: the WHERE clause
+  // already decides whether the body matched, so the (large) HTML never has to
+  // cross the wire to answer the question.
+  async findPostsReferencingMedia(
+    mediaId: string,
+    urlTokens: string[],
+  ): Promise<Post[]> {
+    const bodyConditions: WhereOptions<PostAttributes>[] = urlTokens.flatMap(
+      (token) => {
+        const pattern = `%${escapeLikePattern(token)}%`;
+        return [
+          { content: { [Op.iLike]: pattern } },
+          { pdfUrl: { [Op.iLike]: pattern } },
+        ];
+      },
+    );
+
+    return Post.findAll({
+      attributes: [
+        "id",
+        "title",
+        "slug",
+        "status",
+        "deletedAt",
+        "featuredImageId",
+        "pdfUrl",
+      ],
+      where: {
+        [Op.or]: [{ featuredImageId: mediaId }, ...bodyConditions],
+      },
+      paranoid: false,
+      order: [["createdAt", "DESC"]],
+    });
   }
 
   private paginatedFindOptions(

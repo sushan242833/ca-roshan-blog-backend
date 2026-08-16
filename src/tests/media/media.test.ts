@@ -7,12 +7,13 @@ import {
   MAX_DOCUMENT_UPLOAD_SIZE_BYTES,
   MAX_MEDIA_UPLOAD_SIZE_BYTES,
 } from "@modules/media/media.dto";
+import { PostStatus } from "@models/post.model";
 import {
   createTestRequest,
   setupIntegrationTest,
   teardownIntegrationTests,
 } from "../setup/test-app";
-import { createAdmin, loginAdmin } from "../setup/test-helpers";
+import { createAdmin, createPost, loginAdmin } from "../setup/test-helpers";
 
 interface MediaResponseDto {
   id: string;
@@ -23,6 +24,7 @@ interface MediaResponseDto {
   size: number;
   url: string;
   provider: string;
+  inUse: boolean;
 }
 
 interface MediaResponseBody {
@@ -33,6 +35,21 @@ interface MediaResponseBody {
 interface MediaListResponseBody {
   success: boolean;
   data: MediaResponseDto[];
+}
+
+interface MediaUsageResponseBody {
+  success: boolean;
+  data: {
+    inUse: boolean;
+    usedByAuthorAvatar: boolean;
+    posts: {
+      postId: string;
+      title: string;
+      status: string;
+      trashed: boolean;
+      usedAs: string[];
+    }[];
+  };
 }
 
 const UPLOADS_DIRECTORY = path.resolve(process.cwd(), "uploads");
@@ -191,6 +208,185 @@ describe("media", () => {
 
     assert.equal(body.data.length, 0);
     assert.equal(await fileExists(uploadedFilePath(media.fileName)), false);
+  });
+
+  it("refuses to delete media set as a post's featured image", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+    const media = await uploadTinyPng(login.accessToken);
+    await createPost({
+      adminId: admin.admin.id,
+      title: "Featured image post",
+      status: PostStatus.PUBLISHED,
+      featuredImageId: media.id,
+    });
+
+    const response = await createTestRequest()
+      .delete(`/api/v1/media/${media.id}`)
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .expect(409);
+
+    assert.match(
+      (response.body as { message: string }).message,
+      /Featured image post/,
+    );
+    // The record and the file both survive a refused delete.
+    assert.equal(await fileExists(uploadedFilePath(media.fileName)), true);
+    await createTestRequest()
+      .get(`/api/v1/media/${media.id}`)
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .expect(200);
+  });
+
+  it("refuses to delete media embedded in the body of a draft post", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+    const media = await uploadTinyPng(login.accessToken);
+    await createPost({
+      adminId: admin.admin.id,
+      status: PostStatus.DRAFT,
+      content: `<p>Intro</p><img src="${media.url}" alt="inline" />`,
+    });
+
+    await createTestRequest()
+      .delete(`/api/v1/media/${media.id}`)
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .expect(409);
+  });
+
+  it("refuses to delete a pdf linked by an archived post", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+    const pdf = await uploadTinyPdf(login.accessToken);
+    await createPost({
+      adminId: admin.admin.id,
+      status: PostStatus.ARCHIVED,
+      pdfUrl: pdf.url,
+    });
+
+    await createTestRequest()
+      .delete(`/api/v1/media/${pdf.id}`)
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .expect(409);
+  });
+
+  it("refuses to delete media held by a trashed post, which is restorable", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+    const media = await uploadTinyPng(login.accessToken);
+    const post = await createPost({
+      adminId: admin.admin.id,
+      status: PostStatus.PUBLISHED,
+      featuredImageId: media.id,
+    });
+    await post.destroy();
+
+    await createTestRequest()
+      .delete(`/api/v1/media/${media.id}`)
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .expect(409);
+  });
+
+  it("deletes media once the last post referencing it lets it go", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+    const media = await uploadTinyPng(login.accessToken);
+    const post = await createPost({
+      adminId: admin.admin.id,
+      featuredImageId: media.id,
+    });
+
+    await createTestRequest()
+      .delete(`/api/v1/media/${media.id}`)
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .expect(409);
+
+    await post.update({ featuredImageId: null });
+
+    await createTestRequest()
+      .delete(`/api/v1/media/${media.id}`)
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .expect(204);
+    assert.equal(await fileExists(uploadedFilePath(media.fileName)), false);
+  });
+
+  it("reports where a media item is used", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+    const used = await uploadTinyPng(login.accessToken);
+    const unused = await uploadTinyPng(login.accessToken);
+    const post = await createPost({
+      adminId: admin.admin.id,
+      title: "Usage report post",
+      status: PostStatus.PUBLISHED,
+      featuredImageId: used.id,
+      content: `<p><img src="${used.url}" alt="inline" /></p>`,
+    });
+
+    const usedResponse = await createTestRequest()
+      .get(`/api/v1/media/${used.id}/usage`)
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .expect(200);
+    const usage = (usedResponse.body as MediaUsageResponseBody).data;
+
+    assert.equal(usage.inUse, true);
+    assert.equal(usage.usedByAuthorAvatar, false);
+    assert.equal(usage.posts.length, 1);
+    assert.equal(usage.posts[0].postId, post.id);
+    assert.equal(usage.posts[0].status, "PUBLISHED");
+    assert.equal(usage.posts[0].trashed, false);
+    assert.deepEqual(usage.posts[0].usedAs, ["featuredImage"]);
+
+    const unusedResponse = await createTestRequest()
+      .get(`/api/v1/media/${unused.id}/usage`)
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .expect(200);
+    const unusedUsage = (unusedResponse.body as MediaUsageResponseBody).data;
+
+    assert.equal(unusedUsage.inUse, false);
+    assert.equal(unusedUsage.posts.length, 0);
+  });
+
+  it("flags in-use media in the list so the library can mark it", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+    const featured = await uploadTinyPng(login.accessToken);
+    const inline = await uploadTinyPng(login.accessToken);
+    const unused = await uploadTinyPng(login.accessToken);
+    await createPost({
+      adminId: admin.admin.id,
+      status: PostStatus.PUBLISHED,
+      featuredImageId: featured.id,
+      content: `<p><img src="${inline.url}" alt="inline" /></p>`,
+    });
+
+    const response = await createTestRequest()
+      .get("/api/v1/media")
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .expect(200);
+    const body = response.body as MediaListResponseBody;
+    const byId = new Map(body.data.map((item) => [item.id, item]));
+
+    assert.equal(byId.get(featured.id)?.inUse, true);
+    assert.equal(byId.get(inline.id)?.inUse, true);
+    assert.equal(byId.get(unused.id)?.inUse, false);
+  });
+
+  it("reports a freshly uploaded file as unused", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+
+    const media = await uploadTinyPng(login.accessToken);
+
+    assert.equal(media.inUse, false);
+  });
+
+  it("rejects an unauthenticated usage lookup", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+    const media = await uploadTinyPng(login.accessToken);
+
+    await createTestRequest().get(`/api/v1/media/${media.id}/usage`).expect(401);
   });
 
   it("returns 404 when deleting a random UUID", async () => {

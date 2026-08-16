@@ -44,6 +44,8 @@ interface CreatePostOptions {
   slug?: string;
   content?: string;
   status?: PostStatus;
+  featuredImageId?: string | null;
+  pdfUrl?: string | null;
 }
 
 interface CreateSubscriberOptions {
@@ -158,6 +160,8 @@ export async function createPost(
     readingTime: 1,
     viewCount: 0,
     adminId: options.adminId,
+    featuredImageId: options.featuredImageId ?? null,
+    pdfUrl: options.pdfUrl ?? null,
     publishedAt: status === PostStatus.PUBLISHED ? new Date() : null,
   });
 }
