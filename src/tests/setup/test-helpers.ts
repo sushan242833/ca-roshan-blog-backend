@@ -170,14 +170,11 @@ export async function createSubscriber(
   options: CreateSubscriberOptions = {},
 ): Promise<Subscriber> {
   const email = options.email ?? uniqueEmail("subscriber");
-  const status = options.status ?? SubscriberStatus.PENDING;
+  const status = options.status ?? SubscriberStatus.ACTIVE;
 
   return Subscriber.create({
     email,
     status,
-    verificationToken:
-      status === SubscriberStatus.PENDING ? randomUUID().replace(/-/g, "") : null,
     unsubscribeToken: randomUUID().replace(/-/g, ""),
-    verifiedAt: status === SubscriberStatus.ACTIVE ? new Date() : null,
   });
 }

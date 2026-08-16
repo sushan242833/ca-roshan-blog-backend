@@ -4,6 +4,7 @@ export interface SendEmailPayload {
   html: string;
   text: string;
   replyTo?: string;
+  unsubscribeUrl?: string;
 }
 
 export interface EmailProvider {

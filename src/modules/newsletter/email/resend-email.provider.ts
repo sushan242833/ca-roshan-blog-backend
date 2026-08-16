@@ -52,6 +52,14 @@ export class ResendEmailProvider implements EmailProvider {
         html: payload.html,
         text: payload.text,
         ...(payload.replyTo ? { reply_to: payload.replyTo } : {}),
+        ...(payload.unsubscribeUrl
+          ? {
+              headers: {
+                "List-Unsubscribe": `<${payload.unsubscribeUrl}>`,
+                "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+              },
+            }
+          : {}),
       }),
     });
 

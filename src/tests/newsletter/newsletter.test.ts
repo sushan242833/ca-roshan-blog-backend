@@ -8,16 +8,6 @@ import {
 } from "../setup/test-app";
 import { createSubscriber } from "../setup/test-helpers";
 
-interface SubscriberResponseBody {
-  success: boolean;
-  data: {
-    id: string;
-    email: string;
-    status: SubscriberStatus;
-    verifiedAt: string | null;
-  };
-}
-
 describe("newsletter", () => {
   beforeEach(async () => {
     await setupIntegrationTest();
@@ -27,22 +17,14 @@ describe("newsletter", () => {
     await teardownIntegrationTests();
   });
 
-  it("verifies a pending subscriber", async () => {
+  it("no longer exposes a verification endpoint", async () => {
     const subscriber = await createSubscriber({
-      status: SubscriberStatus.PENDING,
+      status: SubscriberStatus.ACTIVE,
     });
 
-    assert.ok(subscriber.verificationToken);
-
-    const response = await createTestRequest()
-      .get(`/api/v1/subscribers/verify/${subscriber.verificationToken}`)
-      .expect(200);
-    const body = response.body as SubscriberResponseBody;
-
-    assert.equal(body.success, true);
-    assert.equal(body.data.email, subscriber.email);
-    assert.equal(body.data.status, SubscriberStatus.ACTIVE);
-    assert.notEqual(body.data.verifiedAt, null);
+    await createTestRequest()
+      .get(`/api/v1/subscribers/verify/${subscriber.unsubscribeToken}`)
+      .expect(404);
   });
 
   it("does not leak that an email is already subscribed", async () => {

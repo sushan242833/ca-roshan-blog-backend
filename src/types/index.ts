@@ -7,6 +7,6 @@ export type {
   LoginRequest,
   SlugRequestParams,
   SubscribeRequest,
+  SubscriberTokenRequest,
   UpdatePostRequest,
-  VerifySubscriberRequest,
 } from "./http.requests";

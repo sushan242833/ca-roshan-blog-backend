@@ -7,12 +7,12 @@ type SchemaCollection = NonNullable<
 export const newsletterSchemas: SchemaCollection = {
   SubscriberStatus: {
     type: "string",
-    enum: ["PENDING", "ACTIVE", "UNSUBSCRIBED"],
+    enum: ["ACTIVE", "UNSUBSCRIBED"],
     example: "ACTIVE",
   },
   Subscriber: {
     type: "object",
-    required: ["id", "email", "status", "verifiedAt", "createdAt", "updatedAt"],
+    required: ["id", "email", "status", "createdAt", "updatedAt"],
     properties: {
       id: {
         type: "string",
@@ -26,12 +26,6 @@ export const newsletterSchemas: SchemaCollection = {
       },
       status: {
         $ref: "#/components/schemas/SubscriberStatus",
-      },
-      verifiedAt: {
-        type: "string",
-        format: "date-time",
-        nullable: true,
-        example: "2026-06-22T08:20:30.000Z",
       },
       createdAt: {
         type: "string",
@@ -74,8 +68,7 @@ export const newsletterSchemas: SchemaCollection = {
       data: {
         id: "ac3f2167-2a6f-451d-a1a6-666666666666",
         email: "reader@example.com",
-        status: "PENDING",
-        verifiedAt: null,
+        status: "ACTIVE",
         createdAt: "2026-06-22T08:15:30.000Z",
         updatedAt: "2026-06-22T08:15:30.000Z",
       },
@@ -111,17 +104,12 @@ export const newsletterSchemas: SchemaCollection = {
   },
   SubscriberStats: {
     type: "object",
-    required: ["total", "pending", "active", "unsubscribed"],
+    required: ["total", "active", "unsubscribed"],
     properties: {
       total: {
         type: "integer",
         minimum: 0,
         example: 128,
-      },
-      pending: {
-        type: "integer",
-        minimum: 0,
-        example: 12,
       },
       active: {
         type: "integer",

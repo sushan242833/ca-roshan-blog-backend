@@ -64,12 +64,6 @@ export class SubscriberRepository {
     });
   }
 
-  async findByVerificationToken(token: string): Promise<Subscriber | null> {
-    return Subscriber.findOne({
-      where: { verificationToken: token },
-    });
-  }
-
   async findByUnsubscribeToken(token: string): Promise<Subscriber | null> {
     return Subscriber.findOne({
       where: { unsubscribeToken: token },
