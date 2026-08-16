@@ -146,16 +146,24 @@ describe("newsletter unsubscribe flow", () => {
     assert.equal(secondLog.status, NewsletterLogStatus.FAILED);
   });
 
-  it("also links the verification email at the frontend page", async () => {
+  it("activates a new subscriber immediately without a confirmation email", async () => {
     const emails = new CapturingEmailProvider();
     const service = new NewsletterService(undefined, undefined, emails);
 
-    await service.subscribe({ email: "verify.link@example.test" });
-    // The send happens in transaction.afterCommit.
+    const subscribed = await service.subscribe({
+      email: "no.confirm@example.test",
+    });
+    // Any afterCommit side effect would land here.
     await new Promise((resolve) => setImmediate(resolve));
 
-    assert.equal(emails.sent.length, 1);
-    tokenFromUnsubscribeUrl(extractUnsubscribeUrl(emails.sent[0]));
+    assert.equal(emails.sent.length, 0);
+    assert.equal(subscribed.status, SubscriberStatus.ACTIVE);
+
+    const persisted = await Subscriber.findByPk(subscribed.id);
+    assert.equal(persisted?.status, SubscriberStatus.ACTIVE);
+    assert.equal(persisted?.verificationToken, null);
+    assert.notEqual(persisted?.verifiedAt, null);
+    assert.ok(persisted?.unsubscribeToken);
   });
 
   it("does not echo the subscriber's email back to an unauthenticated caller", async () => {

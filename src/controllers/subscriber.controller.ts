@@ -75,13 +75,12 @@ export async function createSubscriber(
   next: NextFunction,
 ) {
   try {
-    // Generic response for every outcome (new, pending, or already-active) so
-    // it can't be used to enumerate which addresses are subscribed.
+    // Generic response for every outcome (new or already-active) so it can't be
+    // used to enumerate which addresses are subscribed.
     await newsletterService.subscribe(req.body);
     return res.status(201).json({
       success: true,
-      message:
-        "If this address isn't already subscribed, a verification email has been sent.",
+      message: "You're subscribed. New posts will be sent to this address.",
     });
   } catch (err) {
     return next(err);

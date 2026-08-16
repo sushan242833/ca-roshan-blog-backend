@@ -15,10 +15,7 @@ import { GoneError, NotFoundError, ValidationError } from "@errors/http-error";
 import { NewsletterLogStatus } from "@models/newsletter-log.model";
 import { PostStatus } from "@models/post.model";
 import { Subscriber, SubscriberStatus } from "@models/subscriber.model";
-import {
-  buildPostNewsletterEmail,
-  buildVerificationEmail,
-} from "@modules/newsletter/email/newsletter-email.templates";
+import { buildPostNewsletterEmail } from "@modules/newsletter/email/newsletter-email.templates";
 import {
   EmailProvider,
   SendEmailPayload,
@@ -38,7 +35,6 @@ import subscriberRepository, {
 } from "@repositories/subscriber.repository";
 
 const TOKEN_BYTES = 32;
-const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const ACTIVE_SUBSCRIBER_BATCH_SIZE = 500;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -113,10 +109,6 @@ export class NewsletterService implements NewsletterJobWorker {
           transaction,
           includeDeleted: true,
         });
-        const verificationToken = createToken();
-        const verificationTokenExpiresAt = new Date(
-          Date.now() + VERIFICATION_TOKEN_TTL_MS,
-        );
         const unsubscribeToken = existing?.unsubscribeToken ?? createToken();
 
         if (
@@ -124,47 +116,30 @@ export class NewsletterService implements NewsletterJobWorker {
           !existing.deletedAt &&
           existing.status === SubscriberStatus.ACTIVE
         ) {
-          // Already verified: do nothing and don't resend. The controller
-          // returns a generic response, so this is indistinguishable from a
-          // fresh subscribe (no account-enumeration signal).
+          // Already subscribed: nothing to do. The controller returns a generic
+          // response, so this is indistinguishable from a fresh subscribe (no
+          // account-enumeration signal).
           return toSubscriberResponse(existing);
         }
 
+        // No double opt-in: a well-formed address is activated immediately.
         const subscriber = existing
-          ? await this.resetExistingSubscriber(
+          ? await this.activateExistingSubscriber(
               existing,
-              verificationToken,
               unsubscribeToken,
               transaction,
             )
           : await this.subscribers.create(
               {
                 email,
-                status: SubscriberStatus.PENDING,
-                verificationToken,
-                verificationTokenExpiresAt,
+                status: SubscriberStatus.ACTIVE,
+                verificationToken: null,
+                verificationTokenExpiresAt: null,
+                verifiedAt: new Date(),
                 unsubscribeToken,
               },
               transaction,
             );
-
-        const emailPayload = this.buildVerificationEmailPayload(
-          subscriber.email,
-          verificationToken,
-          unsubscribeToken,
-        );
-
-        transaction.afterCommit(async () => {
-          // The subscriber is already persisted; a delivery failure (e.g. the
-          // email provider being unreachable) must not fail the request.
-          try {
-            await this.emailProvider.sendEmail(emailPayload);
-          } catch (error: unknown) {
-            console.error(
-              `Failed to send verification email to ${subscriber.email}: ${getErrorMessage(error)}`,
-            );
-          }
-        });
 
         return toSubscriberResponse(subscriber);
       });
@@ -349,9 +324,8 @@ export class NewsletterService implements NewsletterJobWorker {
     }
   }
 
-  private async resetExistingSubscriber(
+  private async activateExistingSubscriber(
     subscriber: Subscriber,
-    verificationToken: string,
     unsubscribeToken: string,
     transaction: Transaction,
   ) {
@@ -359,33 +333,13 @@ export class NewsletterService implements NewsletterJobWorker {
       await this.subscribers.restore(subscriber, transaction);
     }
 
-    subscriber.status = SubscriberStatus.PENDING;
-    subscriber.verificationToken = verificationToken;
-    subscriber.verificationTokenExpiresAt = new Date(
-      Date.now() + VERIFICATION_TOKEN_TTL_MS,
-    );
+    subscriber.status = SubscriberStatus.ACTIVE;
+    subscriber.verificationToken = null;
+    subscriber.verificationTokenExpiresAt = null;
     subscriber.unsubscribeToken = unsubscribeToken;
-    subscriber.verifiedAt = null;
+    subscriber.verifiedAt = subscriber.verifiedAt ?? new Date();
 
     return this.subscribers.save(subscriber, transaction);
-  }
-
-  private buildVerificationEmailPayload(
-    email: string,
-    verificationToken: string,
-    unsubscribeToken: string,
-  ): SendEmailPayload {
-    return buildVerificationEmail({
-      email,
-      verificationUrl: buildUrl(
-        env.APP_BASE_URL,
-        `/verify?token=${encodeURIComponent(verificationToken)}`,
-      ),
-      unsubscribeUrl: buildUrl(
-        env.APP_BASE_URL,
-        `/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`,
-      ),
-    });
   }
 
   private buildPostNewsletterEmailPayload(

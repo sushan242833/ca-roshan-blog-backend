@@ -7,7 +7,7 @@ export const newsletterPaths: PathCollection = {
         "Newsletter"
       ],
       "summary": "Subscribe to newsletter",
-      "description": "Creates a pending newsletter subscription and sends a verification email.",
+      "description": "Creates an active newsletter subscription immediately; no confirmation email is sent.",
       "security": [],
       "requestBody": {
         "required": true,
