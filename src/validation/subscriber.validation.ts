@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import { ValidationError, ValidationIssue } from "@errors/http-error";
 import {
   EmptyRequestParams,
-  VerifySubscriberRequest,
+  SubscriberTokenRequest,
 } from "@app-types/http.requests";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -46,7 +46,7 @@ export function validateCreateSubscriber(
 }
 
 export function validateSubscriberToken(
-  req: Request<VerifySubscriberRequest, unknown, unknown>,
+  req: Request<SubscriberTokenRequest, unknown, unknown>,
   _res: Response,
   next: NextFunction,
 ) {

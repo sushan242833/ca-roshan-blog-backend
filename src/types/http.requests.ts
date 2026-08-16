@@ -29,6 +29,6 @@ export interface ChangePasswordRequest {
 
 export type SubscribeRequest = CreateSubscriberDto;
 
-export interface VerifySubscriberRequest extends ParamsDictionary {
+export interface SubscriberTokenRequest extends ParamsDictionary {
   token: string;
 }

@@ -6,7 +6,7 @@ import {
   EmptyRequestBody,
   EmptyRequestParams,
   SubscribeRequest,
-  VerifySubscriberRequest,
+  SubscriberTokenRequest,
 } from "@app-types/http.requests";
 
 const DEFAULT_ADMIN_LIMIT = 20;
@@ -64,7 +64,7 @@ function getStatusQuery(req: { query: RequestQuery }): SubscriberStatus | undefi
   throw new ValidationError([
     {
       field: "status",
-      message: "status must be PENDING, ACTIVE, or UNSUBSCRIBED.",
+      message: "status must be ACTIVE or UNSUBSCRIBED.",
     },
   ]);
 }
@@ -87,21 +87,8 @@ export async function createSubscriber(
   }
 }
 
-export async function verifySubscriber(
-  req: Request<VerifySubscriberRequest, unknown, EmptyRequestBody>,
-  res: Response,
-  next: NextFunction,
-) {
-  try {
-    const subscriber = await newsletterService.verify(req.params.token);
-    return res.json({ success: true, data: subscriber });
-  } catch (err) {
-    return next(err);
-  }
-}
-
 export async function getUnsubscribeStatus(
-  req: Request<VerifySubscriberRequest, unknown, EmptyRequestBody>,
+  req: Request<SubscriberTokenRequest, unknown, EmptyRequestBody>,
   res: Response,
   next: NextFunction,
 ) {
@@ -116,7 +103,7 @@ export async function getUnsubscribeStatus(
 }
 
 export async function unsubscribeSubscriber(
-  req: Request<VerifySubscriberRequest, unknown, EmptyRequestBody>,
+  req: Request<SubscriberTokenRequest, unknown, EmptyRequestBody>,
   res: Response,
   next: NextFunction,
 ) {
@@ -161,7 +148,6 @@ export async function adminSubscriberStats(
 
 export default {
   createSubscriber,
-  verifySubscriber,
   getUnsubscribeStatus,
   unsubscribeSubscriber,
   adminListSubscribers,

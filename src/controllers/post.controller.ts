@@ -315,7 +315,6 @@ export async function getDashboardStats(
         archived: postStats.archived,
         totalSubscribers: subscriberStats.total,
         activeSubscribers: subscriberStats.active,
-        pendingSubscribers: subscriberStats.pending,
       },
     });
   } catch (err) {

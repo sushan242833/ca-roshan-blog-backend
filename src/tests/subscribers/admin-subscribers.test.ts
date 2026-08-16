@@ -35,17 +35,12 @@ interface SubscriberStatsResponseBody {
   success: boolean;
   data: {
     total: number;
-    pending: number;
     active: number;
     unsubscribed: number;
   };
 }
 
 async function seedSubscribers() {
-  const pending = await createSubscriber({
-    email: "pending.person@example.test",
-    status: SubscriberStatus.PENDING,
-  });
   const active = await createSubscriber({
     email: "active.person@example.test",
     status: SubscriberStatus.ACTIVE,
@@ -55,7 +50,7 @@ async function seedSubscribers() {
     status: SubscriberStatus.UNSUBSCRIBED,
   });
 
-  return { pending, active, unsubscribed };
+  return { active, unsubscribed };
 }
 
 describe("admin subscribers", () => {
@@ -89,10 +84,10 @@ describe("admin subscribers", () => {
     const body = response.body as SubscriberListResponseBody;
 
     assert.equal(body.success, true);
-    assert.equal(body.data.items.length, 3);
+    assert.equal(body.data.items.length, 2);
     assert.equal(body.data.pagination.page, 1);
     assert.equal(body.data.pagination.limit, 20);
-    assert.equal(body.data.pagination.total, 3);
+    assert.equal(body.data.pagination.total, 2);
     assert.equal(body.data.pagination.totalPages, 1);
   });
 
@@ -143,8 +138,7 @@ describe("admin subscribers", () => {
 
     assert.equal(body.success, true);
     assert.deepEqual(body.data, {
-      total: 3,
-      pending: 1,
+      total: 2,
       active: 1,
       unsubscribed: 1,
     });

@@ -47,39 +47,6 @@ export const newsletterPaths: PathCollection = {
       }
     }
   },
-  "/api/v1/subscribers/verify/{token}": {
-    "get": {
-      "tags": [
-        "Newsletter"
-      ],
-      "summary": "Verify newsletter subscription",
-      "description": "Verifies a pending subscriber by verification token.",
-      "security": [],
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/TokenPathParam"
-        }
-      ],
-      "responses": {
-        "200": {
-          "description": "Subscription verified successfully.",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SubscriberResponse"
-              }
-            }
-          }
-        },
-        "400": {
-          "$ref": "#/components/responses/ValidationError"
-        },
-        "404": {
-          "$ref": "#/components/responses/NotFoundError"
-        }
-      }
-    }
-  },
   "/api/v1/subscribers/unsubscribe/{token}": {
     "post": {
       "tags": [
