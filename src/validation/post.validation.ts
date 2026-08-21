@@ -17,8 +17,12 @@ const MAX_SLUG_LENGTH = 255;
 const MAX_PDF_URL_LENGTH = 2048;
 const MAX_PDF_LABEL_LENGTH = 255;
 
+// A relative /files/ path is the Cloudinary raw asset proxied through the
+// frontend's own domain (see its next.config.ts rewrites), and /uploads/ is a
+// self-hosted local upload. Both are same-origin paths on the site, so both are
+// safe hrefs.
 function isValidPdfUrl(value: string): boolean {
-  if (value.startsWith("/uploads/")) {
+  if (value.startsWith("/files/") || value.startsWith("/uploads/")) {
     return true;
   }
 
@@ -191,7 +195,7 @@ function validatePdfFields(
       errors.push({
         field: "pdfUrl",
         message:
-          "pdfUrl must be a valid http(s) URL or a path starting with /uploads/.",
+          "pdfUrl must be a valid http(s) URL or a path starting with /files/ or /uploads/.",
       });
     }
   }
