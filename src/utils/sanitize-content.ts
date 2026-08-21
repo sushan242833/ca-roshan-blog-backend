@@ -50,11 +50,13 @@ const TEXT_PINK = "#C00080";
 
 // Mirrors the rule in src/validation/post.validation.ts (and the frontend's
 // src/lib/pdf-url.ts): a full-content PDF link is either an absolute http(s)
-// URL or a relative /uploads/ path. Anything else — javascript:, data:, other
-// schemes, arbitrary text — is rejected so the value is always a safe href.
+// URL or a relative /files/ or /uploads/ path — the first being a Cloudinary
+// raw asset proxied through the site's own domain, the second a self-hosted
+// upload. Anything else — javascript:, data:, other schemes, arbitrary text —
+// is rejected so the value is always a safe href.
 function isValidPdfUrl(value: string): boolean {
   const trimmed = value.trim();
-  if (trimmed.startsWith("/uploads/")) {
+  if (trimmed.startsWith("/files/") || trimmed.startsWith("/uploads/")) {
     return true;
   }
   try {
