@@ -62,6 +62,14 @@ interface PostShowFeaturedImageResponseBody {
   };
 }
 
+interface PostShowInHeroResponseBody {
+  success: boolean;
+  data: {
+    id: string;
+    showInHero: boolean;
+  };
+}
+
 describe("posts", () => {
   beforeEach(async () => {
     await setupIntegrationTest();
@@ -545,6 +553,54 @@ describe("posts", () => {
         content: "<p>Body.</p>",
         showFeaturedImage: "yes",
       })
+      .expect(400);
+  });
+
+  // Only one post headlines the home page hero: choosing another unsets the
+  // first, and ?hero=true returns just the current one.
+  it("keeps a single hero post and lists it with ?hero=true", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+    const first = await createPost({
+      adminId: admin.admin.id,
+      status: PostStatus.PUBLISHED,
+    });
+    const second = await createPost({
+      adminId: admin.admin.id,
+      status: PostStatus.PUBLISHED,
+    });
+
+    for (const post of [first, second]) {
+      const response = await createTestRequest()
+        .patch(`/api/v1/posts/${post.id}`)
+        .set("Authorization", `Bearer ${login.accessToken}`)
+        .send({ showInHero: true })
+        .expect(200);
+      const body = response.body as PostShowInHeroResponseBody;
+      assert.equal(body.data.showInHero, true);
+    }
+
+    await first.reload();
+    assert.equal(first.showInHero, false);
+
+    const listed = await createTestRequest()
+      .get("/api/v1/posts?hero=true")
+      .expect(200);
+    const listedBody = listed.body as PostListResponseBody;
+    assert.deepEqual(
+      listedBody.data.items.map((item) => item.id),
+      [second.id],
+    );
+  });
+
+  it("rejects a non-boolean showInHero", async () => {
+    const admin = await createAdmin();
+    const login = await loginAdmin(admin);
+
+    await createTestRequest()
+      .post("/api/v1/posts")
+      .set("Authorization", `Bearer ${login.accessToken}`)
+      .send({ title: "Bad Hero", content: "<p>Body.</p>", showInHero: "yes" })
       .expect(400);
   });
 

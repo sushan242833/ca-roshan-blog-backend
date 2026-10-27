@@ -52,6 +52,8 @@ export interface PostAttributes {
   pdfUrl?: string | null;
   pdfLabel?: string | null;
   showFeaturedImage: boolean;
+  // Whether this post headlines the home page hero. At most one post has it.
+  showInHero: boolean;
   // Whether this post is served as a chapter list rather than one page. Derived
   // from `content` and kept in step with the post_chapters rows by
   // regeneratePostChapters — never set by a client.
@@ -92,6 +94,7 @@ export type PostCreationAttributes = Optional<
   | "pdfUrl"
   | "pdfLabel"
   | "showFeaturedImage"
+  | "showInHero"
   | "paginated"
   | "chapterCount"
   | "status"
@@ -172,6 +175,11 @@ export class Post extends Model<PostAttributes, PostCreationAttributes> {
   @Default(true)
   @Column({ type: DataType.BOOLEAN, field: "show_featured_image" })
   showFeaturedImage!: boolean;
+
+  @AllowNull(false)
+  @Default(false)
+  @Column({ type: DataType.BOOLEAN, field: "show_in_hero" })
+  showInHero!: boolean;
 
   @AllowNull(false)
   @Default(false)
