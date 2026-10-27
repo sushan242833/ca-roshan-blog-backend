@@ -33,6 +33,7 @@ export interface PostListFilters {
   category?: string;
   tag?: string;
   featured?: boolean;
+  hero?: boolean;
 }
 
 export interface AdminPostListFilters {
@@ -536,6 +537,23 @@ export class PostRepository {
     );
   }
 
+  // Only one post may headline the hero, so choosing a new one unsets the rest.
+  // paranoid: false reaches soft-deleted rows too, so restoring an old hero
+  // post cannot bring back a second flag.
+  async clearHeroExcept(
+    postId: string,
+    transaction: Transaction,
+  ): Promise<void> {
+    await Post.update(
+      { showInHero: false },
+      {
+        where: { showInHero: true, id: { [Op.ne]: postId } },
+        transaction,
+        paranoid: false,
+      },
+    );
+  }
+
   async slugExists(
     slug: string,
     excludePostId?: string,
@@ -563,6 +581,10 @@ export class PostRepository {
 
     if (typeof filters.featured === "boolean") {
       conditions.push({ featured: filters.featured });
+    }
+
+    if (typeof filters.hero === "boolean") {
+      conditions.push({ showInHero: filters.hero });
     }
 
     if (searchWhere) {

@@ -12,6 +12,7 @@ export interface CreatePostDto {
   pdfUrl?: string | null;
   pdfLabel?: string | null;
   showFeaturedImage?: boolean;
+  showInHero?: boolean;
   status?: PostStatus;
   featured?: boolean;
   categoryIds?: string[];
