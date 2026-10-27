@@ -60,6 +60,16 @@ export const postPaths: PathCollection = {
             "type": "boolean"
           },
           "example": true
+        },
+        {
+          "in": "query",
+          "name": "hero",
+          "required": false,
+          "description": "true returns only the post chosen for the home page hero.",
+          "schema": {
+            "type": "boolean"
+          },
+          "example": true
         }
       ],
       "responses": {

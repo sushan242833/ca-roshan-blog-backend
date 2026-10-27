@@ -275,6 +275,7 @@ export class PostService {
         pdfUrl,
         pdfLabel,
         showFeaturedImage: dto.showFeaturedImage ?? true,
+        showInHero: dto.showInHero ?? false,
         status,
         featured: dto.featured ?? false,
         readingTime: calculateReadingTime(content),
@@ -284,6 +285,9 @@ export class PostService {
       };
 
       const post = await this.repository.create(payload, transaction);
+      if (post.showInHero) {
+        await this.repository.clearHeroExcept(post.id, transaction);
+      }
       await this.repository.replaceCategories(
         post.id,
         categoryIds,
@@ -420,6 +424,13 @@ export class PostService {
 
       if (typeof dto.showFeaturedImage === "boolean") {
         post.showFeaturedImage = dto.showFeaturedImage;
+      }
+
+      if (typeof dto.showInHero === "boolean") {
+        post.showInHero = dto.showInHero;
+        if (dto.showInHero) {
+          await this.repository.clearHeroExcept(post.id, transaction);
+        }
       }
 
       if (dto.categoryIds) {

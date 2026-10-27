@@ -241,6 +241,7 @@ export async function listPublished(
       category: getQueryString(req.query.category),
       tag: getQueryString(req.query.tag),
       featured: getBooleanQuery(req, "featured"),
+      hero: getBooleanQuery(req, "hero"),
     });
     return res.json({ success: true, data: result });
   } catch (err) {

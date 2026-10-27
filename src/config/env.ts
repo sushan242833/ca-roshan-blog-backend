@@ -112,6 +112,13 @@ function getStrongSecret(name: string, nodeEnv: Env["NODE_ENV"]): string {
   const isTest = nodeEnv === "test";
   const value = getEnv(name, isTest ? `test_${name.toLowerCase()}` : undefined);
 
+  // jsonwebtoken rejects an empty key at sign time, so fail at boot instead.
+  if (!value.trim()) {
+    throw new Error(
+      `${name} must not be empty. Generate one with \`openssl rand -base64 48\`.`,
+    );
+  }
+
   if (nodeEnv === "production" || nodeEnv === "staging") {
     if (value.length < 32 || WEAK_SECRETS.has(value)) {
       throw new Error(

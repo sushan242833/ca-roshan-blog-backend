@@ -247,6 +247,7 @@ function validatePostBody(
   validateOptionalBoolean(body, "featured", errors);
   validateOptionalBoolean(body, "published", errors);
   validateOptionalBoolean(body, "showFeaturedImage", errors);
+  validateOptionalBoolean(body, "showInHero", errors);
   validateStatus(body, errors);
   validateContentLengths(body, errors);
   validateSeoLengths(body, errors);

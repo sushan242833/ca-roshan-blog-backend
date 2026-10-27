@@ -66,6 +66,7 @@ export const postSchemas: SchemaCollection = {
       "pdfUrl",
       "pdfLabel",
       "showFeaturedImage",
+      "showInHero",
       "publishedAt",
       "createdAt",
       "updatedAt",
@@ -140,6 +141,12 @@ export const postSchemas: SchemaCollection = {
           "Whether the featured image is shown at the top of the blog detail page.",
         example: true,
       },
+      showInHero: {
+        type: "boolean",
+        description:
+          "Whether this post headlines the home page hero. Setting it to true unsets it on every other post.",
+        example: false,
+      },
       publishedAt: {
         type: "string",
         format: "date-time",
@@ -206,6 +213,7 @@ export const postSchemas: SchemaCollection = {
       pdfUrl: "http://localhost:4000/uploads/full-report.pdf",
       pdfLabel: "Read the full content (PDF)",
       showFeaturedImage: true,
+      showInHero: false,
       publishedAt: "2026-06-22T08:30:00.000Z",
       createdAt: "2026-06-22T08:15:30.000Z",
       updatedAt: "2026-06-22T08:30:00.000Z",
@@ -291,6 +299,12 @@ export const postSchemas: SchemaCollection = {
         description:
           "Whether the featured image is shown at the top of the blog detail page. Defaults to true.",
         example: true,
+      },
+      showInHero: {
+        type: "boolean",
+        description:
+          "Whether this post headlines the home page hero. Setting it to true unsets it on every other post.",
+        example: false,
       },
       status: {
         $ref: "#/components/schemas/PostStatus",
@@ -380,6 +394,12 @@ export const postSchemas: SchemaCollection = {
         type: "boolean",
         description:
           "Whether the featured image is shown at the top of the blog detail page.",
+        example: false,
+      },
+      showInHero: {
+        type: "boolean",
+        description:
+          "Whether this post headlines the home page hero. Setting it to true unsets it on every other post.",
         example: false,
       },
       status: {
