@@ -1,5 +1,6 @@
 import { CreatePostDto } from "@dto/create-post.dto";
 import { UpdatePostDto } from "@dto/update-post.dto";
+import { UpdateFeaturedSlotsDto } from "@dto/featured-posts.dto";
 import { CreateSubscriberDto } from "@dto/subscriber.dto";
 import { ParamsDictionary } from "express-serve-static-core";
 
@@ -16,6 +17,7 @@ export interface SlugRequestParams extends ParamsDictionary {
 
 export type CreatePostRequest = CreatePostDto;
 export type UpdatePostRequest = UpdatePostDto;
+export type UpdateFeaturedSlotsRequest = UpdateFeaturedSlotsDto;
 
 export interface LoginRequest {
   email: string;

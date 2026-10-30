@@ -75,3 +75,25 @@ This flag has two halves:
 - **Frontend — build-time.** Inlined via `next.config.ts` and read through `src/config/features.ts`. Flipping it requires a **rebuild**.
 
 Set the flag to the same value in both `.env` files so the nav link, page, sitemap entry, and API endpoint appear/disappear together.
+
+## API
+
+Full request/response schemas are served by Swagger at `/api/docs` (enabled in development and staging, or anywhere with `ENABLE_SWAGGER=true`). Admin routes require `Authorization: Bearer <access token>`.
+
+### Home page featured posts
+
+The home page "Featured Insights" section has six fixed slots. A post holds at most one slot, and its slot number is exposed as `featuredPosition` (1-6, or `null`) on every post response.
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/posts/featured` | Public | Published featured posts. Slotted posts come first in slot order, then the remaining featured posts newest-first. `limit` defaults to and is capped at 6. |
+| `GET` | `/api/v1/admin/featured-posts` | Admin | `{ slots: [{ position, post }] }`: always six entries in position order, with `post: null` for an empty slot. |
+| `PUT` | `/api/v1/admin/featured-posts` | Admin | Replaces the whole layout in one transaction. Body: `{ slots: [{ position, postId }] }`. Returns the same shape as the `GET`. |
+
+`PUT` rules:
+
+- At most 6 entries. Positions must be unique integers from 1 to 6, and a post may appear only once. Positions left out, or sent with `postId: null`, become empty.
+- Every `postId` must belong to an existing, published, non-deleted post. Otherwise the request fails with `400 VALIDATION_ERROR` and the previous layout is kept.
+- Slotted posts are set to `featured = true`. A post that loses its slot keeps its `featured` flag, which the hero fallback still reads.
+
+Slots are cleared automatically when a post is unpublished, archived or deleted, or when `featured` is set to `false` through `PATCH /api/v1/posts/:id`. Republishing or restoring a post does not give it its slot back.

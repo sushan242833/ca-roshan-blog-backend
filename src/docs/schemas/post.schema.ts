@@ -67,6 +67,7 @@ export const postSchemas: SchemaCollection = {
       "pdfLabel",
       "showFeaturedImage",
       "showInHero",
+      "featuredPosition",
       "publishedAt",
       "createdAt",
       "updatedAt",
@@ -147,6 +148,15 @@ export const postSchemas: SchemaCollection = {
           "Whether this post headlines the home page hero. Setting it to true unsets it on every other post.",
         example: false,
       },
+      featuredPosition: {
+        type: "integer",
+        nullable: true,
+        minimum: 1,
+        maximum: 6,
+        description:
+          "Home page Featured Insights slot this post holds, or null. Managed through /api/v1/admin/featured-posts and cleared automatically when the post is unpublished, archived, deleted or un-featured.",
+        example: 1,
+      },
       publishedAt: {
         type: "string",
         format: "date-time",
@@ -214,6 +224,7 @@ export const postSchemas: SchemaCollection = {
       pdfLabel: "Read the full content (PDF)",
       showFeaturedImage: true,
       showInHero: false,
+      featuredPosition: 1,
       publishedAt: "2026-06-22T08:30:00.000Z",
       createdAt: "2026-06-22T08:15:30.000Z",
       updatedAt: "2026-06-22T08:30:00.000Z",
@@ -483,6 +494,77 @@ export const postSchemas: SchemaCollection = {
     },
     example: {
       success: true,
+    },
+  },
+  FeaturedSlot: {
+    type: "object",
+    required: ["position", "post"],
+    properties: {
+      position: {
+        type: "integer",
+        minimum: 1,
+        maximum: 6,
+        example: 1,
+      },
+      post: {
+        allOf: [{ $ref: "#/components/schemas/PostSummary" }],
+        nullable: true,
+      },
+    },
+  },
+  FeaturedSlotsResponse: {
+    type: "object",
+    required: ["success", "data"],
+    properties: {
+      success: {
+        type: "boolean",
+        example: true,
+      },
+      data: {
+        type: "object",
+        required: ["slots"],
+        properties: {
+          slots: {
+            type: "array",
+            description: "Always exactly 6 entries, in position order.",
+            minItems: 6,
+            maxItems: 6,
+            items: {
+              $ref: "#/components/schemas/FeaturedSlot",
+            },
+          },
+        },
+      },
+    },
+  },
+  UpdateFeaturedSlotsRequest: {
+    type: "object",
+    required: ["slots"],
+    properties: {
+      slots: {
+        type: "array",
+        maxItems: 6,
+        description:
+          "Positions must be unique; a post may appear at most once. Omitted positions become empty.",
+        items: {
+          type: "object",
+          required: ["position", "postId"],
+          properties: {
+            position: {
+              type: "integer",
+              minimum: 1,
+              maximum: 6,
+              example: 1,
+            },
+            postId: {
+              type: "string",
+              format: "uuid",
+              nullable: true,
+              example: "5020ddfc-77fa-44c7-9a7a-444444444444",
+            },
+          },
+        },
+      },
     },
   },
 };

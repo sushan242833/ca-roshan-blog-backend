@@ -10,6 +10,7 @@ export type AuditAction =
   | "post.delete"
   | "post.publish"
   | "post.preview_token"
+  | "post.featured_slots"
   | "media.delete"
   | "subscribers.export";
 
