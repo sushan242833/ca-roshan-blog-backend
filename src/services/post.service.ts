@@ -9,6 +9,7 @@ import {
   toPostSummaryResponse,
 } from "@dto/post-response.dto";
 import { UpdatePostDto } from "@dto/update-post.dto";
+import { FEATURED_SLOT_COUNT } from "@dto/featured-posts.dto";
 import {
   InternalServerError,
   NotFoundError,
@@ -129,8 +130,45 @@ function resolveUpdateStatus(dto: UpdatePostDto): PostStatus | undefined {
   return undefined;
 }
 
+// A post is in the hero or in Featured Insights, never both. Whichever one
+// this save turns on wins over the other; turning on both at once is refused.
+function keepHeroOutOfFeatured(
+  post: Pick<Post, "featured" | "featuredPosition" | "showInHero">,
+  dto: { featured?: boolean; showInHero?: boolean },
+): void {
+  if (dto.featured === true && dto.showInHero === true) {
+    throw new ValidationError([
+      {
+        field: "showInHero",
+        message:
+          "A post in the hero cannot also be in Featured Insights. Untick one of them.",
+      },
+    ]);
+  }
+
+  if (dto.showInHero === true) {
+    post.featured = false;
+    post.featuredPosition = null;
+  } else if (dto.featured === true) {
+    post.showInHero = false;
+  }
+}
+
+function isOnHomePage(
+  post: Pick<Post, "featured" | "status">,
+): boolean {
+  return post.featured && post.status === PostStatus.PUBLISHED;
+}
+
 function applyStatus(post: Post, status: PostStatus): void {
   post.status = status;
+
+  // A home page slot only ever holds a published post, so leaving PUBLISHED
+  // vacates it in the same save. Republishing a still-featured post claims a
+  // free slot again (PostService.claimFeaturedSlot), not necessarily the old one.
+  if (status !== PostStatus.PUBLISHED) {
+    post.featuredPosition = null;
+  }
 
   if (status === PostStatus.PUBLISHED && !post.publishedAt) {
     post.publishedAt = new Date();
@@ -249,6 +287,11 @@ export class PostService {
       const tagIds = uniqueValues(dto.tagIds);
 
       validateSeo(explicitMetaTitle, explicitMetaDescription);
+      // A new post has nothing to give up, so this only refuses both at once.
+      keepHeroOutOfFeatured(
+        { featured: false, featuredPosition: null, showInHero: false },
+        dto,
+      );
 
       const metaTitle = explicitMetaTitle ?? deriveMetaTitle(title);
       const metaDescription =
@@ -278,6 +321,15 @@ export class PostService {
         showInHero: dto.showInHero ?? false,
         status,
         featured: dto.featured ?? false,
+        featuredPosition: await this.claimFeaturedSlot(
+          {
+            featured: dto.featured ?? false,
+            status,
+            featuredPosition: null,
+          },
+          false,
+          transaction,
+        ),
         readingTime: calculateReadingTime(content),
         viewCount: 0,
         adminId,
@@ -322,6 +374,7 @@ export class PostService {
       }
 
       const previousStatus = post.status;
+      const wasOnHomePage = isOnHomePage(post);
 
       const metaTitleWasFallback =
         !post.metaTitle ||
@@ -380,12 +433,29 @@ export class PostService {
 
       if (typeof dto.featured === "boolean") {
         post.featured = dto.featured;
+        // The slots are a subset of featured posts; un-featuring vacates one.
+        if (!dto.featured) {
+          post.featuredPosition = null;
+        }
       }
+
+      if (typeof dto.showInHero === "boolean") {
+        post.showInHero = dto.showInHero;
+      }
+      keepHeroOutOfFeatured(post, dto);
 
       const nextStatus = resolveUpdateStatus(dto);
       if (nextStatus) {
         applyStatus(post, nextStatus);
       }
+
+      // Before any other row is written, so the slot lock is never taken
+      // while this transaction already holds row locks a slot rewrite needs.
+      post.featuredPosition = await this.claimFeaturedSlot(
+        post,
+        wasOnHomePage,
+        transaction,
+      );
 
       const explicitMetaTitle =
         typeof dto.metaTitle !== "undefined"
@@ -427,7 +497,6 @@ export class PostService {
       }
 
       if (typeof dto.showInHero === "boolean") {
-        post.showInHero = dto.showInHero;
         if (dto.showInHero) {
           await this.repository.clearHeroExcept(post.id, transaction);
         }
@@ -482,6 +551,9 @@ export class PostService {
         throw new NotFoundError("Post not found.");
       }
 
+      // A trashed post must not keep its slot: the partial unique index would
+      // let another post take it, and restoring would then surface two.
+      await this.repository.clearFeaturedPosition(post.id, transaction);
       await this.repository.softDelete(post, transaction);
     });
   }
@@ -497,7 +569,14 @@ export class PostService {
       }
 
       if (post.deletedAt) {
+        // Locked and claimed before the row is written, as in update(). A
+        // restore is never refused for want of a slot.
+        const position = await this.claimFeaturedSlot(post, true, transaction);
         await this.repository.restore(post, transaction);
+        if (position !== null) {
+          post.featuredPosition = position;
+          await this.repository.save(post, transaction);
+        }
       }
 
       return toPostDetailResponse(
@@ -651,7 +730,13 @@ export class PostService {
       }
 
       const previousStatus = post.status;
+      const wasOnHomePage = isOnHomePage(post);
       applyStatus(post, status);
+      post.featuredPosition = await this.claimFeaturedSlot(
+        post,
+        wasOnHomePage,
+        transaction,
+      );
       await this.repository.save(post, transaction);
       await this.dispatchNewsletterOnce(
         post,
@@ -664,6 +749,35 @@ export class PostService {
         await this.getPersistedPost(post.id, transaction),
       );
     });
+  }
+
+  // Featured and published means on the home page, which means holding one of
+  // the Featured Insights slots, so such a post takes the lowest free one.
+  // With all slots taken, a post newly put on the home page is refused; one
+  // already there unslotted (featured while the slots were full) stays as is.
+  private async claimFeaturedSlot(
+    post: Pick<Post, "featured" | "status" | "featuredPosition">,
+    wasOnHomePage: boolean,
+    transaction: Transaction,
+  ): Promise<number | null> {
+    if (!isOnHomePage(post) || post.featuredPosition != null) {
+      return post.featuredPosition ?? null;
+    }
+
+    await this.repository.lockFeaturedSlots(transaction);
+    const position = await this.repository.findFreeFeaturedPosition(
+      FEATURED_SLOT_COUNT,
+      transaction,
+    );
+    if (position === null && !wasOnHomePage) {
+      throw new ValidationError([
+        {
+          field: "featured",
+          message: `Featured Insights already holds ${FEATURED_SLOT_COUNT} posts. Remove one there first, or untick this.`,
+        },
+      ]);
+    }
+    return position;
   }
 
   private async generateUniqueSlug(

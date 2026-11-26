@@ -608,8 +608,156 @@ export class PostRepository {
     );
   }
 
+  // Posts holding a home page slot come first, in slot order, then the rest of
+  // the featured posts newest-first. Slot and flag move together (featuring a
+  // published post claims a slot, losing a slot un-features it), so the
+  // unslotted group only holds posts featured while all six slots were full.
   async listFeatured(page: number, limit: number): Promise<PaginatedPosts> {
-    return this.listPublished({ page, limit, featured: true });
+    return Post.findAndCountAll(
+      this.paginatedFindOptions(
+        { page, limit },
+        { status: PostStatus.PUBLISHED, featured: true },
+        [
+          ["featuredPosition", "ASC NULLS LAST"],
+          ["publishedAt", "DESC NULLS LAST"],
+          ["id", "DESC"],
+        ],
+      ),
+    );
+  }
+
+  // Every post currently holding a home page slot, in slot order. At most six
+  // rows by construction (CHECK + partial unique index, migration 033).
+  async findSlottedPosts(transaction?: Transaction): Promise<Post[]> {
+    return Post.findAll({
+      attributes: { exclude: LIST_EXCLUDED_ATTRIBUTES },
+      where: { featuredPosition: { [Op.ne]: null } },
+      order: [["featuredPosition", "ASC"]],
+      include: postAssociations(),
+      transaction,
+    });
+  }
+
+  // Ids among `postIds` that are published and not soft-deleted.
+  async findPublishedIds(
+    postIds: string[],
+    transaction: Transaction,
+  ): Promise<Set<string>> {
+    if (postIds.length === 0) {
+      return new Set();
+    }
+
+    const rows = await Post.findAll({
+      attributes: ["id"],
+      where: { id: { [Op.in]: postIds }, status: PostStatus.PUBLISHED },
+      transaction,
+    });
+    return new Set(rows.map((row) => row.id));
+  }
+
+  // Ids among `postIds` currently headlining the home page hero.
+  async findHeroIds(
+    postIds: string[],
+    transaction: Transaction,
+  ): Promise<Set<string>> {
+    if (postIds.length === 0) {
+      return new Set();
+    }
+
+    const rows = await Post.findAll({
+      attributes: ["id"],
+      where: { id: { [Op.in]: postIds }, showInHero: true },
+      transaction,
+    });
+    return new Set(rows.map((row) => row.id));
+  }
+
+  // Serialises slot rewrites. Without it, two concurrent saves would each
+  // clear and refill the slots and the loser would hit the unique index as a
+  // 500 rather than simply applying second. Released at commit/rollback.
+  async lockFeaturedSlots(transaction: Transaction): Promise<void> {
+    await sequelize.query(
+      `SELECT pg_advisory_xact_lock(hashtext('posts.featured_position'))`,
+      { transaction },
+    );
+  }
+
+  // paranoid: false reaches trashed rows too, so nothing outside the live set
+  // can ever be left holding a slot.
+  async clearAllFeaturedPositions(transaction: Transaction): Promise<void> {
+    await Post.update(
+      { featuredPosition: null },
+      {
+        where: { featuredPosition: { [Op.ne]: null } },
+        transaction,
+        paranoid: false,
+      },
+    );
+  }
+
+  // Taking a slot always marks the post featured, since the public featured
+  // listing (and its hero fallback) only ever reads featured posts.
+  async assignFeaturedPosition(
+    postId: string,
+    position: number,
+    transaction: Transaction,
+  ): Promise<void> {
+    await Post.update(
+      { featuredPosition: position, featured: true },
+      { where: { id: postId }, transaction },
+    );
+  }
+
+  // Lowest slot no live post holds, or null when all `slotCount` are taken.
+  // Call under lockFeaturedSlots so two saves cannot claim the same one.
+  async findFreeFeaturedPosition(
+    slotCount: number,
+    transaction: Transaction,
+  ): Promise<number | null> {
+    const rows = await Post.findAll({
+      attributes: ["featuredPosition"],
+      where: { featuredPosition: { [Op.ne]: null } },
+      transaction,
+    });
+    const taken = new Set(rows.map((row) => row.featuredPosition));
+    for (let position = 1; position <= slotCount; position += 1) {
+      if (!taken.has(position)) {
+        return position;
+      }
+    }
+    return null;
+  }
+
+  async findSlottedIds(transaction: Transaction): Promise<string[]> {
+    const rows = await Post.findAll({
+      attributes: ["id"],
+      where: { featuredPosition: { [Op.ne]: null } },
+      transaction,
+    });
+    return rows.map((row) => row.id);
+  }
+
+  async unfeaturePosts(
+    postIds: string[],
+    transaction: Transaction,
+  ): Promise<void> {
+    if (postIds.length === 0) {
+      return;
+    }
+    await Post.update(
+      { featured: false, featuredPosition: null },
+      { where: { id: { [Op.in]: postIds } }, transaction },
+    );
+  }
+
+  async clearFeaturedPosition(
+    postId: string,
+    transaction: Transaction,
+  ): Promise<void> {
+    await Post.update(
+      { featuredPosition: null },
+      { where: { id: postId }, transaction, paranoid: false },
+    );
   }
 
   async adminList(filters: AdminPostListFilters): Promise<PaginatedPosts> {
@@ -794,7 +942,7 @@ export class PostRepository {
   }
 
   private paginatedFindOptions(
-    filters: Pick<PostListFilters, "page" | "limit" | "category" | "tag">,
+    filters: Pick<PostListFilters, "page" | "limit">,
     where: WhereOptions<PostAttributes>,
     order: Order,
   ): FindAndCountOptions<PostAttributes> {

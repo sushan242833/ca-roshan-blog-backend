@@ -15,7 +15,7 @@ import {
   loginAdmin,
 } from "../setup/test-helpers";
 
-type Method = "post" | "patch" | "delete";
+type Method = "post" | "put" | "patch" | "delete";
 
 interface MutatingEndpoint {
   method: Method;
@@ -78,6 +78,12 @@ const MUTATING_ENDPOINTS: MutatingEndpoint[] = [
     path: (ids) => `/api/v1/posts/${ids.postId}`,
     // Soft delete: returns the envelope rather than 204, unlike the taxonomy
     // deletes below.
+    okStatus: 200,
+  },
+  {
+    method: "put",
+    path: () => "/api/v1/admin/featured-posts",
+    body: { slots: [] },
     okStatus: 200,
   },
   {
@@ -279,6 +285,7 @@ describe("authorization matrix for mutating endpoints", () => {
       "/api/v1/admin/subscribers",
       "/api/v1/admin/subscribers/stats",
       "/api/v1/posts/admin/list",
+      "/api/v1/admin/featured-posts",
     ];
 
     for (const path of adminOnlyReads) {

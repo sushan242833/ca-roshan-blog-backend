@@ -54,6 +54,10 @@ export interface PostAttributes {
   showFeaturedImage: boolean;
   // Whether this post headlines the home page hero. At most one post has it.
   showInHero: boolean;
+  // The home page "Featured Insights" slot (1-6) this post holds, or null.
+  // Unique among live posts (migration 033) and only ever set on a published,
+  // featured post — see FeaturedPostService and the clears in PostService.
+  featuredPosition?: number | null;
   // Whether this post is served as a chapter list rather than one page. Derived
   // from `content` and kept in step with the post_chapters rows by
   // regeneratePostChapters — never set by a client.
@@ -95,6 +99,7 @@ export type PostCreationAttributes = Optional<
   | "pdfLabel"
   | "showFeaturedImage"
   | "showInHero"
+  | "featuredPosition"
   | "paginated"
   | "chapterCount"
   | "status"
@@ -180,6 +185,10 @@ export class Post extends Model<PostAttributes, PostCreationAttributes> {
   @Default(false)
   @Column({ type: DataType.BOOLEAN, field: "show_in_hero" })
   showInHero!: boolean;
+
+  @AllowNull(true)
+  @Column({ type: DataType.SMALLINT, field: "featured_position" })
+  featuredPosition?: number | null;
 
   @AllowNull(false)
   @Default(false)
