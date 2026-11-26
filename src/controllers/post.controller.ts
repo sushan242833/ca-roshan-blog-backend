@@ -18,6 +18,8 @@ const DEFAULT_PUBLIC_LIMIT = 10;
 const DEFAULT_ADMIN_LIMIT = 20;
 const MAX_LIMIT = 100;
 const MAX_PAGE = 1000;
+// The home page shows at most six featured posts (one per slot).
+const MAX_FEATURED_LIMIT = 6;
 
 type RequestQuery = Request<
   EmptyRequestParams,
@@ -257,7 +259,13 @@ export async function listFeatured(
   try {
     const result = await postService.getFeatured(
       getPositiveIntegerQuery(req, "page", 1),
-      getPositiveIntegerQuery(req, "limit", DEFAULT_PUBLIC_LIMIT, MAX_LIMIT),
+      // The default is clamped too: an absent limit is returned unclamped.
+      getPositiveIntegerQuery(
+        req,
+        "limit",
+        Math.min(DEFAULT_PUBLIC_LIMIT, MAX_FEATURED_LIMIT),
+        MAX_FEATURED_LIMIT,
+      ),
     );
     return res.json({ success: true, data: result });
   } catch (err) {

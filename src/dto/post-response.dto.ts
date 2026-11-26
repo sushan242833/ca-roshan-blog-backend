@@ -37,6 +37,7 @@ export interface PostSummaryResponse {
   pdfLabel: string | null;
   showFeaturedImage: boolean;
   showInHero: boolean;
+  featuredPosition: number | null;
   publishedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -102,6 +103,7 @@ export function toPostSummaryResponse(post: Post): PostSummaryResponse {
     pdfLabel: post.pdfLabel ?? null,
     showFeaturedImage: post.showFeaturedImage ?? true,
     showInHero: post.showInHero ?? false,
+    featuredPosition: post.featuredPosition ?? null,
     publishedAt: post.publishedAt ?? null,
     createdAt: post.createdAt,
     updatedAt: post.updatedAt,

@@ -184,14 +184,24 @@ export const postPaths: PathCollection = {
         "Posts"
       ],
       "summary": "List featured posts",
-      "description": "Returns published posts marked as featured.",
+      "description": "Returns published posts marked as featured. Posts holding a home page slot come first in slot order (featuredPosition 1-6), followed by the other featured posts newest-first.",
       "security": [],
       "parameters": [
         {
           "$ref": "#/components/parameters/PageQueryParam"
         },
         {
-          "$ref": "#/components/parameters/LimitQueryParam"
+          "in": "query",
+          "name": "limit",
+          "required": false,
+          "description": "Values above 6 are clamped to 6.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 6,
+            "default": 6
+          },
+          "example": 6
         }
       ],
       "responses": {
@@ -556,6 +566,82 @@ export const postPaths: PathCollection = {
         },
         "404": {
           "$ref": "#/components/responses/NotFoundError"
+        }
+      }
+    }
+  },
+  "/api/v1/admin/featured-posts": {
+    "get": {
+      "tags": [
+        "Posts"
+      ],
+      "summary": "Get home page featured slots",
+      "description": "Returns the six home page \"Featured Insights\" slots in position order. Empty slots have post: null.",
+      "responses": {
+        "200": {
+          "description": "Featured slots fetched successfully.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeaturedSlotsResponse"
+              }
+            }
+          }
+        },
+        "401": {
+          "$ref": "#/components/responses/UnauthorizedError"
+        }
+      }
+    },
+    "put": {
+      "tags": [
+        "Posts"
+      ],
+      "summary": "Replace home page featured slots",
+      "description": "Atomically replaces the whole slot layout. Positions not listed (or listed with postId: null) become empty. Each listed post must be published and not deleted, and is marked featured. Posts removed from a slot keep their featured flag.",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/UpdateFeaturedSlotsRequest"
+            },
+            "examples": {
+              "reorder": {
+                "summary": "Fill slots 1 and 2, leave the rest empty",
+                "value": {
+                  "slots": [
+                    {
+                      "position": 1,
+                      "postId": "5020ddfc-77fa-44c7-9a7a-444444444444"
+                    },
+                    {
+                      "position": 2,
+                      "postId": "6131eefd-88ab-45d8-8b8b-555555555555"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "description": "Featured slots saved successfully.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeaturedSlotsResponse"
+              }
+            }
+          }
+        },
+        "400": {
+          "$ref": "#/components/responses/ValidationError"
+        },
+        "401": {
+          "$ref": "#/components/responses/UnauthorizedError"
         }
       }
     }
